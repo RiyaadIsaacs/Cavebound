@@ -42,6 +42,10 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UUserWidget> HUDWidget;
 
-	// Line-trace under the cursor and send that world point to the Character. 
+	// Line-trace under the cursor and send that world point to the Character
 	void OnClickMove();
+
+	bool bOrbitingCamera = false;
+	float LastOrbitMouseX = 0.f;
+	float LastOrbitMouseY = 0.f;
 };

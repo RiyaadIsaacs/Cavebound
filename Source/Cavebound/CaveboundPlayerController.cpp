@@ -125,6 +125,31 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 	{
 		OnClickMove();
 	}
+
+	if (IsInputKeyDown(EKeys::RightMouseButton))
+	{
+		float MouseX = 0.f;
+		float MouseY = 0.f;
+		if (GetMousePosition(MouseX, MouseY))
+		{
+			if (bOrbitingCamera)
+			{
+				const float DeltaX = MouseX - LastOrbitMouseX;
+				const float DeltaY = MouseY - LastOrbitMouseY;
+				if (ACaveboundCharacter* PlayerCharacter = Cast<ACaveboundCharacter>(GetPawn()))
+				{
+					PlayerCharacter->OrbitCamera(DeltaX, DeltaY);
+				}
+			}
+			LastOrbitMouseX = MouseX;
+			LastOrbitMouseY = MouseY;
+			bOrbitingCamera = true;
+		}
+	}
+	else
+	{
+		bOrbitingCamera = false;
+	}
 }
 
 void ACaveboundPlayerController::OnClickMove()

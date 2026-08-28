@@ -28,6 +28,10 @@ public:
 	// Clicked the tree: walk to it, then mine wood while standing in range. 
 	void SetTreeTarget(ACaveboundTree* Tree);
 
+	// Hold right click and drag to rotate mouse
+
+	void OrbitCamera(float MouseX, float MouseY);
+
 protected:
 	void StopMining();
 	void TryMine(float DeltaTime);
@@ -46,6 +50,16 @@ protected:
 	// How close (cm) before the character stops walking.
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float ArrivalDistance = 80.f;
+
+	// Mouse sensitivity 
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float CameraOrbitSensitivity = 0.3f;
+
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float CameraMinPitch = -80.f;
+
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float CameraMaxPitch = -15.f;
 
 	FVector MoveDestination = FVector::ZeroVector;
 	bool bHasMoveDestination = false;

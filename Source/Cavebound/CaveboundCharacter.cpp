@@ -54,6 +54,25 @@ ACaveboundCharacter::ACaveboundCharacter()
 	}
 }
 
+// Rotate the camera boom based on mouse movement while right clicking
+void ACaveboundCharacter::OrbitCamera(float MouseX, float MouseY)
+{
+	if (!CameraBoom)
+	{
+		return;
+	}
+
+	FRotator Rotation = CameraBoom->GetRelativeRotation();
+	Rotation.Yaw += MouseX * CameraOrbitSensitivity;
+	// Mouse up (positive Y) looks more top-down
+	Rotation.Pitch = FMath::Clamp(
+		Rotation.Pitch - MouseY * CameraOrbitSensitivity,
+		CameraMinPitch,
+		CameraMaxPitch);
+	Rotation.Roll = 0.f;
+	CameraBoom->SetRelativeRotation(Rotation);
+}
+
 void ACaveboundCharacter::SetMoveDestination(const FVector& Destination)
 {
 	StopMining();
