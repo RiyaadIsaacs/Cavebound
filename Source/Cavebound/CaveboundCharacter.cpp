@@ -1,4 +1,6 @@
 #include "CaveboundCharacter.h"
+#include "CaveboundGameMode.h"
+#include "CaveboundTree.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -6,7 +8,6 @@
 
 ACaveboundCharacter::ACaveboundCharacter()
 {
-
 	PrimaryActorTick.bCanEverTick = true;
 
 	// Mouse look does not rotate the body.
@@ -16,17 +17,18 @@ ACaveboundCharacter::ACaveboundCharacter()
 
 	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
 	MoveComp->bOrientRotationToMovement = true;
-	MoveComp->RotationRate = FRotator(0.f, 540.f, 0.f); // Yaw degrees per second
-	MoveComp->MaxWalkSpeed = 600.f;                      // Around 6 metres per second
-	MoveComp->AirControl = 1.f;                          // still steer if a click happens while landing
+	MoveComp->RotationRate = FRotator(0.f, 540.f, 0.f);
+	MoveComp->MaxWalkSpeed = 600.f;
+	MoveComp->AirControl = 1.f;
 
 	// Camera boom
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	CameraBoom->SetupAttachment(RootComponent);          // follow the capsule
-	CameraBoom->TargetArmLength = 1200.f;                // camera distance. raise to see more map
+	CameraBoom->SetupAttachment(RootComponent);
+	CameraBoom->TargetArmLength = 1200.f;
 	CameraBoom->SetRelativeRotation(FRotator(-55.f, 0.f, 0.f)); // pitch (-55) for almost top-down view
-	CameraBoom->bDoCollisionTest = false;                // do not pull in if a wall is in the way
+	CameraBoom->bDoCollisionTest = false; // do not pull in if a wall is in the way
 	CameraBoom->bUsePawnControlRotation = false;
+
 	// Keep the camera locked while the body turns to walk.
 	CameraBoom->bInheritPitch = false;
 	CameraBoom->bInheritYaw = false;
@@ -54,13 +56,74 @@ ACaveboundCharacter::ACaveboundCharacter()
 
 void ACaveboundCharacter::SetMoveDestination(const FVector& Destination)
 {
+	StopMining();
 	MoveDestination = Destination;
 	bHasMoveDestination = true;
+}
+
+void ACaveboundCharacter::SetTreeTarget(ACaveboundTree* Tree)
+{
+	if (!Tree)
+	{
+		SetMoveDestination(GetActorLocation());
+		return;
+	}
+
+	TargetTree = Tree;
+	MiningTime = 0.f;
+
+	// Walk toward the trunk, not the click point on the canopy (it can be in the air).
+	MoveDestination = Tree->GetActorLocation();
+	bHasMoveDestination = true;
+}
+
+void ACaveboundCharacter::StopMining()
+{
+	TargetTree = nullptr;
+	MiningTime = 0.f;
+}
+
+void ACaveboundCharacter::TryMine(float DeltaTime)
+{
+	ACaveboundTree* Tree = TargetTree.Get();
+	if (!Tree || Tree->IsDestroyed())
+	{
+		StopMining();
+		return;
+	}
+
+	FVector ToTree = Tree->GetActorLocation() - GetActorLocation();
+	ToTree.Z = 0.f;
+	if (ToTree.Size() > Tree->GetMineRange())
+	{
+		MiningTime = 0.f;
+		return;
+	}
+
+	bHasMoveDestination = false;
+	MiningTime += DeltaTime;
+
+	if (MiningTime >= Tree->GetHarvestInterval())
+	{
+		MiningTime = 0.f;
+		if (UWorld* World = GetWorld())
+		{
+			if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
+			{
+				GameMode->AddWood(Tree->GetWoodPerHarvest());
+			}
+		}
+	}
 }
 
 void ACaveboundCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (TargetTree.IsValid())
+	{
+		TryMine(DeltaTime);
+	}
 
 	if (!bHasMoveDestination)
 	{
@@ -69,10 +132,16 @@ void ACaveboundCharacter::Tick(float DeltaTime)
 
 	const FVector Current = GetActorLocation();
 	FVector ToTarget = MoveDestination - Current;
-	ToTarget.Z = 0.f; // remove z axis, don't want to fly to the click height
+	ToTarget.Z = 0.f;
 
-	// Stop distance in cm (Unreal units)
-	if (ToTarget.Size() <= ArrivalDistance)
+	// When walking to the tree, stop at mine range so we do not walk into the trunk.
+	float StopDistance = ArrivalDistance;
+	if (ACaveboundTree* Tree = TargetTree.Get())
+	{
+		StopDistance = Tree->GetMineRange();
+	}
+
+	if (ToTarget.Size() <= StopDistance)
 	{
 		bHasMoveDestination = false;
 		return;

@@ -1,7 +1,9 @@
 #include "CaveboundPlayerController.h"
 #include "CaveboundCharacter.h"
+#include "CaveboundTree.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "Blueprint/UserWidget.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "InputAction.h"
@@ -64,6 +66,7 @@ void ACaveboundPlayerController::BeginPlay()
 	}
 
 	EnsureClickMoveInput();
+	ShowHUD();
 
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
@@ -72,6 +75,20 @@ void ACaveboundPlayerController::BeginPlay()
 		{
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
 		}
+	}
+}
+
+void ACaveboundPlayerController::ShowHUD()
+{
+	if (!HUDWidgetClass || HUDWidget)
+	{
+		return;
+	}
+
+	HUDWidget = CreateWidget<UUserWidget>(this, HUDWidgetClass);
+	if (HUDWidget)
+	{
+		HUDWidget->AddToViewport(0);
 	}
 }
 
@@ -136,6 +153,13 @@ void ACaveboundPlayerController::OnClickMove()
 
 	if (ACaveboundCharacter* PlayerCharacter = Cast<ACaveboundCharacter>(ControlledPawn))
 	{
-		PlayerCharacter->SetMoveDestination(Hit.ImpactPoint);
+		if (ACaveboundTree* Tree = Cast<ACaveboundTree>(Hit.GetActor()))
+		{
+			PlayerCharacter->SetTreeTarget(Tree);
+		}
+		else
+		{
+			PlayerCharacter->SetMoveDestination(Hit.ImpactPoint);
+		}
 	}
 }

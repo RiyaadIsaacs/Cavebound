@@ -7,9 +7,10 @@
 class USpringArmComponent;
 class UCameraComponent;
 class UStaticMeshComponent;
+class ACaveboundTree;
 
 /**
-  The player's body in the world: capsule collision, a visible mesh, walking and an almost top-down camera that follows automatically.
+  The player's body in the world
  */
 UCLASS()
 class CAVEBOUND_API ACaveboundCharacter : public ACharacter
@@ -21,11 +22,16 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
-	// Called by the PlayerController when the player clicks the world.
+	// Called by the PlayerController when the player clicks the ground.
 	void SetMoveDestination(const FVector& Destination);
 
+	// Clicked the tree: walk to it, then mine wood while standing in range. 
+	void SetTreeTarget(ACaveboundTree* Tree);
+
 protected:
-	// Camera stick from the capsule.
+	void StopMining();
+	void TryMine(float DeltaTime);
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;
 
@@ -41,9 +47,12 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float ArrivalDistance = 80.f;
 
-	// World location we are walking toward. 
 	FVector MoveDestination = FVector::ZeroVector;
-
-	// False until the first click.
 	bool bHasMoveDestination = false;
+
+	// Main tower to mine wood from. Null if we are not mining
+	TWeakObjectPtr<ACaveboundTree> TargetTree;
+
+	// Accumulates time while in mine range; resets when we step away
+	float MiningTime = 0.f;
 };

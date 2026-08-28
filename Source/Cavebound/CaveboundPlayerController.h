@@ -6,6 +6,7 @@
 
 class UInputMappingContext;
 class UInputAction;
+class UUserWidget;
 
 /**
  * Reads the mouse and tells the Character where to walk.
@@ -32,6 +33,14 @@ protected:
 	TObjectPtr<UInputAction> ClickMoveAction;
 
 	void EnsureClickMoveInput();
+	void ShowHUD();
+
+	// For assigning HUD 
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> HUDWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> HUDWidget;
 
 	// Line-trace under the cursor and send that world point to the Character. 
 	void OnClickMove();
