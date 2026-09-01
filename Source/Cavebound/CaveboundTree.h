@@ -34,6 +34,7 @@ public:
 	float GetMaxHealth() const { return MaxHealth; }
 
 	// Called by enemies 
+	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	void ApplyDamage(float Amount);
 
 	bool IsDestroyed() const { return Health <= 0.f; }
