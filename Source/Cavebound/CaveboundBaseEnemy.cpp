@@ -49,6 +49,15 @@ void ACaveboundBaseEnemy::ApplyDamage(float Amount)
 
 void ACaveboundBaseEnemy::OnDeath()
 {
+	// Notify the game mode of enemy defetead 
+	if (UWorld* World = GetWorld())
+	{
+		if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
+		{
+			GameMode->RegisterEnemyDefeated();
+		}
+	}
+
 	Destroy();
 }
 

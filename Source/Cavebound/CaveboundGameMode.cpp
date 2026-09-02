@@ -26,12 +26,7 @@ void ACaveboundGameMode::StartPlay()
 	Super::StartPlay();
 	EnsureTree();
 	CollectPathSplines();
-
-	// Repeating spawner. FirstEnemyDelay, then SpawnEnemy every EnemySpawnInterval
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().SetTimer(EnemySpawnTimer,this,&ACaveboundGameMode::SpawnEnemy,EnemySpawnInterval,true,FirstEnemyDelay);
-	}
+	RoundState = ECaveboundRoundState::Idle;
 }
 
 void ACaveboundGameMode::EnsureTree()
@@ -74,7 +69,7 @@ void ACaveboundGameMode::EnsureTree()
 
 void ACaveboundGameMode::CollectPathSplines()
 {
-	// Terrain BeginPlay already ran (Super::StartPlay). Look up Path* splines by name
+	// Look up Path* splines by name
 	PathSplines.Reset();
 
 	UWorld* World = GetWorld();
@@ -104,6 +99,7 @@ void ACaveboundGameMode::CollectPathSplines()
 			}
 
 			const FString SplineName = Spline->GetName();
+
 			// BP_ProceduralTerrain names them Path1 / Path2 / Path3
 			if (SplineName.Contains(TEXT("Path")))
 			{
@@ -113,11 +109,70 @@ void ACaveboundGameMode::CollectPathSplines()
 	}
 }
 
-// Spawn one enemy on the next path, cycling 1 - 2 - 3
+void ACaveboundGameMode::StartRound()
+{
+	if (bGameOver || RoundState != ECaveboundRoundState::Idle)
+	{
+		return;
+	}
+
+	ClearRoundTimers();
+	EnemiesSpawnedThisRound = 0;
+	EnemiesAliveThisRound = 0;
+	NextPathIndex = 0;
+	RoundState = ECaveboundRoundState::Collecting;
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(CollectionTimer,this,&ACaveboundGameMode::BeginCombatPhase,CollectionDuration,false);
+	}
+}
+
+void ACaveboundGameMode::BeginCombatPhase()
+{
+	if (bGameOver || RoundState != ECaveboundRoundState::Collecting)
+	{
+		return;
+	}
+
+	RoundState = ECaveboundRoundState::Combat;
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(EnemySpawnTimer,this,&ACaveboundGameMode::SpawnEnemy,EnemySpawnInterval,true,0.f);
+	}
+}
+
+void ACaveboundGameMode::EndRound()
+{
+	ClearRoundTimers();
+	EnemiesSpawnedThisRound = 0;
+	EnemiesAliveThisRound = 0;
+	RoundState = ECaveboundRoundState::Idle;
+}
+
+void ACaveboundGameMode::ClearRoundTimers()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(CollectionTimer);
+		World->GetTimerManager().ClearTimer(EnemySpawnTimer);
+	}
+}
+
 void ACaveboundGameMode::SpawnEnemy()
 {
-	if (bGameOver)
+	if (bGameOver || RoundState != ECaveboundRoundState::Combat)
 	{
+		return;
+	}
+
+	if (EnemiesSpawnedThisRound >= MaxEnemiesPerRound)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(EnemySpawnTimer);
+		}
 		return;
 	}
 
@@ -156,12 +211,80 @@ void ACaveboundGameMode::SpawnEnemy()
 	{
 		// Bind this enemy to the chosen path and the centre tree.
 		Enemy->InitAlongPath(ChosenSpline, Tree);
+		++EnemiesSpawnedThisRound;
+		++EnemiesAliveThisRound;
+
+		if (EnemiesSpawnedThisRound >= MaxEnemiesPerRound)
+		{
+			World->GetTimerManager().ClearTimer(EnemySpawnTimer);
+		}
 	}
+}
+
+// Called by enemies when they are destroyed to update if the round ends
+void ACaveboundGameMode::RegisterEnemyDefeated()
+{
+	if (RoundState != ECaveboundRoundState::Combat)
+	{
+		return;
+	}
+
+	EnemiesAliveThisRound = FMath::Max(0, EnemiesAliveThisRound - 1);
+
+	if (EnemiesSpawnedThisRound >= MaxEnemiesPerRound && EnemiesAliveThisRound <= 0)
+	{
+		EndRound();
+	}
+}
+
+// Seconds left in the collection phase. Returns 0 unless Collecting 
+float ACaveboundGameMode::GetCollectionTimeRemaining() const
+{
+	if (RoundState != ECaveboundRoundState::Collecting)
+	{
+		return 0.f;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		return World->GetTimerManager().GetTimerRemaining(CollectionTimer);
+	}
+
+	return 0.f;
+}
+
+bool ACaveboundGameMode::CanCollectWood() const
+{
+	return RoundState == ECaveboundRoundState::Collecting
+		|| RoundState == ECaveboundRoundState::Combat;
+}
+
+void ACaveboundGameMode::NotifyMiningBlocked()
+{
+	if (bHasShownRoundNotStartedMessage || CanCollectWood() || bGameOver)
+	{
+		return;
+	}
+
+	bHasShownRoundNotStartedMessage = true;
+	bPendingRoundNotStartedPopup = true;
+}
+
+// Pop up the "Round Not Started" message once, then clear it
+bool ACaveboundGameMode::ShouldShowRoundNotStartedPopup()
+{
+	if (!bPendingRoundNotStartedPopup)
+	{
+		return false;
+	}
+
+	bPendingRoundNotStartedPopup = false;
+	return true;
 }
 
 void ACaveboundGameMode::AddWood(int32 Amount)
 {
-	if (bGameOver || Amount <= 0)
+	if (bGameOver || Amount <= 0 || !CanCollectWood())
 	{
 		return;
 	}
@@ -172,9 +295,6 @@ void ACaveboundGameMode::AddWood(int32 Amount)
 void ACaveboundGameMode::HandleTreeDestroyed()
 {
 	bGameOver = true;
-	if (UWorld* World = GetWorld())
-	{
-		// Stop the spawn timer so new enemies do not appear after game over.
-		World->GetTimerManager().ClearTimer(EnemySpawnTimer);
-	}
+	RoundState = ECaveboundRoundState::GameOver;
+	ClearRoundTimers();
 }

@@ -120,6 +120,21 @@ void ACaveboundCharacter::TryMine(float DeltaTime)
 	}
 
 	bHasMoveDestination = false;
+
+	// If can't collect wood, reset mining time and notify player
+	if (UWorld* World = GetWorld())
+	{
+		if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
+		{
+			if (!GameMode->CanCollectWood())
+			{
+				MiningTime = 0.f;
+				GameMode->NotifyMiningBlocked();
+				return;
+			}
+		}
+	}
+
 	MiningTime += DeltaTime;
 
 	if (MiningTime >= Tree->GetHarvestInterval())
