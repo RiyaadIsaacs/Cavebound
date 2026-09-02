@@ -7,8 +7,7 @@ ACaveboundEnemy::ACaveboundEnemy()
 	VisualMesh->SetRelativeScale3D(FVector(0.55f, 0.55f, 1.1f));
 
 	// Load a basic cone mesh from the engine content
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(
-		TEXT("/Engine/BasicShapes/Cone.Cone"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(TEXT("/Engine/BasicShapes/Cone.Cone"));
 	if (ConeMesh.Succeeded())
 	{
 		VisualMesh->SetStaticMesh(ConeMesh.Object);

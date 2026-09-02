@@ -1,4 +1,4 @@
-#include "CaveboundEnemyBase.h"
+#include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundTree.h"
 #include "Components/SplineComponent.h"
@@ -78,7 +78,7 @@ void ACaveboundBaseEnemy::Tick(float DeltaTime)
 		}
 	}
 
-	// Close enough to the tree: stop walking and chip health. Otherwise follow the spline.
+	// Close enough to the tree: stop walking and chip health. Otherwise follow the spline
 	if (IsInAttackRange())
 	{
 		AttackCurrentTarget(DeltaTime);

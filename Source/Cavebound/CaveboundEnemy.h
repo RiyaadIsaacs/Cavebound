@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CaveboundEnemyBase.h"
+#include "CaveboundBaseEnemy.h"
 #include "CaveboundEnemy.generated.h"
 
 /**

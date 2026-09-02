@@ -1,7 +1,7 @@
 #include "CaveboundGameMode.h"
 #include "CaveboundCharacter.h"
 #include "CaveboundEnemy.h"
-#include "CaveboundEnemyBase.h"
+#include "CaveboundBaseEnemy.h"
 #include "CaveboundPlayerController.h"
 #include "CaveboundTree.h"
 #include "Components/SplineComponent.h"

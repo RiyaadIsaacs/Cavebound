@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "CaveboundEnemyBase.generated.h"
+#include "CaveboundBaseEnemy.generated.h"
 
 class UStaticMeshComponent;
 class USplineComponent;

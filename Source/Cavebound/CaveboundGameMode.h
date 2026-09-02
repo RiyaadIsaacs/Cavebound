@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "CaveboundEnemyBase.h"
+#include "CaveboundBaseEnemy.h"
 #include "CaveboundTree.h"
 #include "CaveboundGameMode.generated.h"
 
@@ -62,7 +62,7 @@ protected:
 
 	// Enemy type to spawn
 	UPROPERTY(EditAnywhere, Category = "Enemies")
-	TSubclassOf<ACaveboundEnemyBase> EnemyClass;
+	TSubclassOf<ACaveboundBaseEnemy> EnemyClass;
 
 	UPROPERTY(EditAnywhere, Category = "Enemies")
 	float EnemySpawnInterval = 3.0f;
