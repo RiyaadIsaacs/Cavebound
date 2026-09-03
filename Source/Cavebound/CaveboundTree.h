@@ -2,10 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "CaveboundDamageFlash.h"
 #include "CaveboundTree.generated.h"
 
 class UStaticMeshComponent;
 class USceneComponent;
+class ACaveboundBaseEnemy;
+class ACaveboundTreeProjectile;
 
 /**
  * The central tower: a magical wood tree.
@@ -17,6 +20,8 @@ class CAVEBOUND_API ACaveboundTree : public AActor
 
 public:
 	ACaveboundTree();
+
+	virtual void Tick(float DeltaTime) override;
 
 	// How close the player must stand to mine (cm).
 	float GetMineRange() const { return MineRange; }
@@ -40,6 +45,11 @@ public:
 	bool IsDestroyed() const { return Health <= 0.f; }
 
 protected:
+	void PlayDamageFlash();
+	void TryFireAtNearestEnemy();
+
+	ACaveboundBaseEnemy* FindNearestEnemy() const;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tree")
 	TObjectPtr<USceneComponent> SceneRoot;
 
@@ -65,4 +75,29 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Tower")
 	float Health = 1000.f;
+
+	UPROPERTY(EditAnywhere, Category = "Tower")
+	float HitFlashDuration = 0.15f;
+
+	UPROPERTY(EditAnywhere, Category = "Tower")
+	FLinearColor HitFlashColor = FLinearColor(1.f, 0.f, 0.f);
+
+	FTimerHandle HitFlashTimer;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float AttackRange = 1200.f;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float FireInterval = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float ProjectileDamage = 10.f;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float ProjectileSpeed = 900.f;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	TSubclassOf<ACaveboundTreeProjectile> ProjectileClass;
+
+	float FireTime = 0.f;
 };
