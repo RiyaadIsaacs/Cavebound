@@ -1,5 +1,6 @@
 #include "CaveboundPlayerController.h"
 #include "CaveboundCharacter.h"
+#include "CaveboundHoverHealth.h"
 #include "CaveboundTree.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -150,6 +151,8 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 	{
 		bOrbitingCamera = false;
 	}
+
+	UpdateHoveredHealthTarget();
 }
 
 void ACaveboundPlayerController::OnClickMove()
@@ -187,4 +190,74 @@ void ACaveboundPlayerController::OnClickMove()
 			PlayerCharacter->SetMoveDestination(Hit.ImpactPoint);
 		}
 	}
+}
+
+void ACaveboundPlayerController::UpdateHoveredHealthTarget()
+{
+	if (bOrbitingCamera)
+	{
+		return;
+	}
+
+	HoveredHealthActor = nullptr;
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	FVector WorldLocation;
+	FVector WorldDirection;
+	if (!DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
+	{
+		return;
+	}
+
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(HoverHealth), false, GetPawn());
+	const FVector TraceEnd = WorldLocation + WorldDirection * 100000.f;
+	if (!World->LineTraceSingleByChannel(Hit, WorldLocation, TraceEnd, ECC_Visibility, Params))
+	{
+		return;
+	}
+
+	AActor* HitActor = Hit.GetActor();
+	if (!IsValid(HitActor) || HitActor == GetPawn())
+	{
+		return;
+	}
+
+	if (HitActor->Implements<UCaveboundHoverHealth>())
+	{
+		HoveredHealthActor = HitActor;
+	}
+}
+
+bool ACaveboundPlayerController::HasHoveredHealthTarget() const
+{
+	const AActor* Actor = HoveredHealthActor.Get();
+	return Actor && Actor->Implements<UCaveboundHoverHealth>();
+}
+
+float ACaveboundPlayerController::GetHoveredHealth() const
+{
+	AActor* Actor = HoveredHealthActor.Get();
+	if (!Actor || !Actor->Implements<UCaveboundHoverHealth>())
+	{
+		return 0.f;
+	}
+
+	return ICaveboundHoverHealth::Execute_GetHoverHealth(Actor);
+}
+
+float ACaveboundPlayerController::GetHoveredMaxHealth() const
+{
+	AActor* Actor = HoveredHealthActor.Get();
+	if (!Actor || !Actor->Implements<UCaveboundHoverHealth>())
+	{
+		return 0.f;
+	}
+
+	return ICaveboundHoverHealth::Execute_GetHoverMaxHealth(Actor);
 }

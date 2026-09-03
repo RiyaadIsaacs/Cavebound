@@ -19,21 +19,31 @@ class CAVEBOUND_API ACaveboundPlayerController : public APlayerController
 public:
 	ACaveboundPlayerController();
 
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	bool HasHoveredHealthTarget() const;
+
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	float GetHoveredHealth() const;
+
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	float GetHoveredMaxHealth() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
 
-	// Collection of action mappings (controls and such).
+	// Collection of action mappings (controls and such)
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> DefaultMappingContext;
 
-	// The "click to move" action.
+	// The "click to move" action
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> ClickMoveAction;
 
 	void EnsureClickMoveInput();
 	void ShowHUD();
+	void UpdateHoveredHealthTarget();
 
 	// For assigning HUD 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -44,6 +54,8 @@ protected:
 
 	// Line-trace under the cursor and send that world point to the Character
 	void OnClickMove();
+
+	TWeakObjectPtr<AActor> HoveredHealthActor;
 
 	bool bOrbitingCamera = false;
 	float LastOrbitMouseX = 0.f;

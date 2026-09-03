@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "CaveboundHoverHealth.h"
 #include "CaveboundBaseEnemy.generated.h"
 
 class UStaticMeshComponent;
@@ -12,7 +13,7 @@ class ACaveboundTree;
  * Base enemy with different virtual functions for different behaviour overrides
  */
 UCLASS(Abstract, Blueprintable)
-class CAVEBOUND_API ACaveboundBaseEnemy : public AActor
+class CAVEBOUND_API ACaveboundBaseEnemy : public AActor, public ICaveboundHoverHealth
 {
 	GENERATED_BODY()
 
@@ -20,6 +21,10 @@ public:
 	ACaveboundBaseEnemy();
 
 	virtual void Tick(float DeltaTime) override;
+
+	// ICaveboundHoverHealth interface for the HUD to show HP on mouse hover
+	virtual float GetHoverHealth_Implementation() const override { return Health; }
+	virtual float GetHoverMaxHealth_Implementation() const override { return MaxHealth; }
 
 	// Which path to walk and target to attack 
 	void InitAlongPath(USplineComponent* Spline, ACaveboundTree* InTree);
