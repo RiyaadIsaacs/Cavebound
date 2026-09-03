@@ -3,26 +3,19 @@
 #include "CoreMinimal.h"
 
 class UStaticMeshComponent;
+class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class UObject;
 struct FTimerHandle;
 
-// flash state for a single mesh and material
-struct FCaveboundMeshFlashState
-{
-	TWeakObjectPtr<UStaticMeshComponent> Mesh;
-	int32 MaterialIndex = 0;
-	FLinearColor OriginalColor = FLinearColor::White;
-	TWeakObjectPtr<UMaterialInstanceDynamic> MID;
-};
-
+/**
+ * Applies a red overlay material on hit, then removes it after Duration seconds
+ */
 class FCaveboundDamageFlash
 {
 public:
-	static void FlashMeshes(UObject* WorldContext,const TArray<UStaticMeshComponent*>& Meshes,FTimerHandle& TimerHandle,
-		TArray<FCaveboundMeshFlashState>& Cache,
-		FLinearColor FlashColor,
+	static void FlashMeshes(UObject* WorldContext,const TArray<UStaticMeshComponent*>& Meshes,FTimerHandle& TimerHandle,FLinearColor FlashColor,
 		float Duration);
 
-	static void RestoreFlash(TArray<FCaveboundMeshFlashState>& Cache);
+	static void ClearFlash(const TArray<UStaticMeshComponent*>& Meshes);
 };

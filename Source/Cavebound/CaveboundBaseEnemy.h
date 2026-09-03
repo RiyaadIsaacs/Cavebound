@@ -86,7 +86,6 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	FLinearColor HitFlashColor = FLinearColor(1.f, 0.f, 0.f);
 
-	TArray<FCaveboundMeshFlashState> HitFlashCache;
 	FTimerHandle HitFlashTimer;
 
 	TWeakObjectPtr<USplineComponent> PathSpline;

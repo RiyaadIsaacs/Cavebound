@@ -81,7 +81,7 @@ void ACaveboundTree::PlayDamageFlash()
 		Meshes.Add(CanopyMesh);
 	}
 
-	FCaveboundDamageFlash::FlashMeshes(this,Meshes,HitFlashTimer,HitFlashCache,HitFlashColor,HitFlashDuration);
+	FCaveboundDamageFlash::FlashMeshes(this, Meshes, HitFlashTimer, HitFlashColor, HitFlashDuration);
 }
 
 void ACaveboundTree::Tick(float DeltaTime)

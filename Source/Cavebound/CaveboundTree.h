@@ -82,7 +82,6 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Tower")
 	FLinearColor HitFlashColor = FLinearColor(1.f, 0.f, 0.f);
 
-	TArray<FCaveboundMeshFlashState> HitFlashCache;
 	FTimerHandle HitFlashTimer;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")

@@ -3,27 +3,50 @@
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "TimerManager.h"
+#include "UObject/ConstructorHelpers.h"
 
-static const FName ColorParam(TEXT("Color"));
-
-void FCaveboundDamageFlash::RestoreFlash(TArray<FCaveboundMeshFlashState>& Cache)
+// A flat unlit red material built from the engine's WidgetMaterial_Transparent
+static UMaterialInstanceDynamic* GetOrCreateRedMID(UObject* WorldContext)
 {
-	for (FCaveboundMeshFlashState& Entry : Cache)
+	// One shared MID across the whole session
+	static TWeakObjectPtr<UMaterialInstanceDynamic> SharedMID;
+	if (UMaterialInstanceDynamic* Existing = SharedMID.Get())
 	{
-		if (UMaterialInstanceDynamic* MID = Entry.MID.Get())
-		{
-			MID->SetVectorParameterValue(ColorParam, Entry.OriginalColor);
-		}
+		return Existing;
 	}
 
-	Cache.Reset();
+	// Use the engine's widget translucent material as a base
+	UMaterialInterface* Base = Cast<UMaterialInterface>(StaticLoadObject(UMaterialInterface::StaticClass(),nullptr,
+		TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Translucent.Widget3DPassThrough_Translucent")));
+
+	if (!Base)
+	{
+		return nullptr;
+	}
+
+	UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Base, WorldContext);
+	if (MID)
+	{
+		// Bright red, slightly transparent so the original shape still reads through
+		MID->SetVectorParameterValue(FName(TEXT("Color")), FLinearColor(1.f, 0.f, 0.f, 0.7f));
+		SharedMID = MID;
+	}
+
+	return MID;
 }
 
-void FCaveboundDamageFlash::FlashMeshes(
-	UObject* WorldContext,
-	const TArray<UStaticMeshComponent*>& Meshes,
-	FTimerHandle& TimerHandle,
-	TArray<FCaveboundMeshFlashState>& Cache,
+void FCaveboundDamageFlash::ClearFlash(const TArray<UStaticMeshComponent*>& Meshes)
+{
+	for (UStaticMeshComponent* Mesh : Meshes)
+	{
+		if (IsValid(Mesh))
+		{
+			Mesh->SetOverlayMaterial(nullptr);
+		}
+	}
+}
+
+void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStaticMeshComponent*>& Meshes,FTimerHandle& TimerHandle,
 	FLinearColor FlashColor,
 	float Duration)
 {
@@ -33,50 +56,40 @@ void FCaveboundDamageFlash::FlashMeshes(
 		return;
 	}
 
+	// Clear any previous flash timer so rapid hits restart cleanly
 	World->GetTimerManager().ClearTimer(TimerHandle);
-	RestoreFlash(Cache);
 
-	for (UStaticMeshComponent* Mesh : Meshes)
-	{
-		if (!IsValid(Mesh))
-		{
-			continue;
-		}
-
-		const int32 NumMaterials = Mesh->GetNumMaterials();
-		for (int32 MatIndex = 0; MatIndex < NumMaterials; ++MatIndex)
-		{
-			UMaterialInstanceDynamic* MID = Mesh->CreateAndSetMaterialInstanceDynamic(MatIndex);
-			if (!MID)
-			{
-				continue;
-			}
-
-			FLinearColor OriginalColor = FLinearColor::White;
-			MID->GetVectorParameterValue(ColorParam, OriginalColor);
-
-			FCaveboundMeshFlashState State;
-			State.Mesh = Mesh;
-			State.MaterialIndex = MatIndex;
-			State.OriginalColor = OriginalColor;
-			State.MID = MID;
-			Cache.Add(State);
-
-			MID->SetVectorParameterValue(ColorParam, FlashColor);
-		}
-	}
-
-	if (Cache.Num() == 0)
+	UMaterialInstanceDynamic* RedMID = GetOrCreateRedMID(WorldContext);
+	if (!RedMID)
 	{
 		return;
 	}
 
-	AActor* Owner = Cast<AActor>(WorldContext);
-	TArray<FCaveboundMeshFlashState>* CachePtr = &Cache;
-	FTimerDelegate RestoreDelegate;
-	RestoreDelegate.BindWeakLambda(Owner, [CachePtr]()
+	// FlashColor defaults to red but allow overrides
+	RedMID->SetVectorParameterValue(FName(TEXT("Color")), FlashColor);
+
+	// Apply the overlay to every mesh
+	for (UStaticMeshComponent* Mesh : Meshes)
 	{
-		FCaveboundDamageFlash::RestoreFlash(*CachePtr);
+		if (IsValid(Mesh))
+		{
+			Mesh->SetOverlayMaterial(RedMID);
+		}
+	}
+
+	// After Duration, remove the overlay
+	AActor* Owner = Cast<AActor>(WorldContext);
+	TArray<UStaticMeshComponent*> MeshesCopy = Meshes;
+	FTimerDelegate RestoreDelegate;
+	RestoreDelegate.BindWeakLambda(Owner, [MeshesCopy]()
+	{
+		for (UStaticMeshComponent* Mesh : MeshesCopy)
+		{
+			if (IsValid(Mesh))
+			{
+				Mesh->SetOverlayMaterial(nullptr);
+			}
+		}
 	});
 
 	World->GetTimerManager().SetTimer(TimerHandle, RestoreDelegate, Duration, false);

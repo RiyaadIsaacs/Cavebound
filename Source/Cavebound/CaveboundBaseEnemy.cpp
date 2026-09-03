@@ -59,7 +59,7 @@ void ACaveboundBaseEnemy::PlayDamageFlash()
 		Meshes.Add(VisualMesh);
 	}
 
-	FCaveboundDamageFlash::FlashMeshes(this,Meshes,HitFlashTimer,HitFlashCache,HitFlashColor,HitFlashDuration);
+	FCaveboundDamageFlash::FlashMeshes(this, Meshes, HitFlashTimer, HitFlashColor, HitFlashDuration);
 }
 
 void ACaveboundBaseEnemy::OnDeath()
