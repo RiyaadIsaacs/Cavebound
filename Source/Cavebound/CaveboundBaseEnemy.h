@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "CaveboundDamageFlash.h"
 #include "CaveboundHoverHealth.h"
 #include "CaveboundBaseEnemy.generated.h"
 
@@ -52,6 +53,8 @@ protected:
 
 	bool IsInAttackRange() const;
 
+	void PlayDamageFlash();
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mesh")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
 
@@ -76,6 +79,15 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AttackDamage = 8.f;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float HitFlashDuration = 0.15f;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	FLinearColor HitFlashColor = FLinearColor(1.f, 0.f, 0.f);
+
+	TArray<FCaveboundMeshFlashState> HitFlashCache;
+	FTimerHandle HitFlashTimer;
 
 	TWeakObjectPtr<USplineComponent> PathSpline;
 	TWeakObjectPtr<ACaveboundTree> Tree;

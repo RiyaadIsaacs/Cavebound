@@ -13,7 +13,9 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	SetRootComponent(VisualMesh);
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Block);
+	VisualMesh->SetGenerateOverlapEvents(true);
 
 	Health = MaxHealth;
 }
@@ -41,10 +43,23 @@ void ACaveboundBaseEnemy::ApplyDamage(float Amount)
 	}
 
 	Health = FMath::Max(0.f, Health - Amount);
+	PlayDamageFlash();
+
 	if (IsDead())
 	{
 		OnDeath();
 	}
+}
+
+void ACaveboundBaseEnemy::PlayDamageFlash()
+{
+	TArray<UStaticMeshComponent*> Meshes;
+	if (VisualMesh)
+	{
+		Meshes.Add(VisualMesh);
+	}
+
+	FCaveboundDamageFlash::FlashMeshes(this,Meshes,HitFlashTimer,HitFlashCache,HitFlashColor,HitFlashDuration);
 }
 
 void ACaveboundBaseEnemy::OnDeath()
