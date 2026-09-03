@@ -62,7 +62,7 @@ void ACaveboundGameMode::EnsureTree()
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	Tree = World->SpawnActor<ACaveboundTree>(
 		ACaveboundTree::StaticClass(),
-		FVector(500.f, 0.f, 0.f),
+		FVector(0, 0.f, 0.f),
 		FRotator::ZeroRotator,
 		SpawnParams);
 }
