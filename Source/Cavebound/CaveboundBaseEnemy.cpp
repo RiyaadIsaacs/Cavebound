@@ -14,9 +14,12 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 	// Create mesh
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	SetRootComponent(VisualMesh);
+	// Enemies Block WorldDynamic by default, which turns arrow Overlap into Block and
+	// kills BeginOverlap. Overlap WorldDynamic so projectiles can register hits.
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Block);
+	VisualMesh->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	VisualMesh->SetGenerateOverlapEvents(true);
 
 	Health = MaxHealth;
