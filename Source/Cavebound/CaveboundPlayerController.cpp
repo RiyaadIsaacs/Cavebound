@@ -10,6 +10,8 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "InputCoreTypes.h"
+#include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 ACaveboundPlayerController::ACaveboundPlayerController()
 {
@@ -54,11 +56,7 @@ void ACaveboundPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	FInputModeGameAndUI InputMode;
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	InputMode.SetHideCursorDuringCapture(false);
-	SetInputMode(InputMode);
-	bShowMouseCursor = true;
+	ApplyGameplayInputMode();
 
 	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
 	{
@@ -93,6 +91,98 @@ void ACaveboundPlayerController::ShowHUD()
 	}
 }
 
+void ACaveboundPlayerController::ApplyGameplayInputMode()
+{
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InputMode);
+	bShowMouseCursor = true;
+}
+
+void ACaveboundPlayerController::ApplyPauseInputMode()
+{
+	FInputModeUIOnly InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	if (PauseMenuWidget)
+	{
+		InputMode.SetWidgetToFocus(PauseMenuWidget->TakeWidget());
+	}
+	SetInputMode(InputMode);
+	bShowMouseCursor = true;
+}
+
+void ACaveboundPlayerController::ShowPauseMenu()
+{
+	if (!PauseMenuWidgetClass)
+	{
+		return;
+	}
+
+	if (!PauseMenuWidget)
+	{
+		PauseMenuWidget = CreateWidget<UUserWidget>(this, PauseMenuWidgetClass);
+	}
+
+	if (PauseMenuWidget && !PauseMenuWidget->IsInViewport())
+	{
+		// Above the gameplay HUD
+		PauseMenuWidget->AddToViewport(10);
+	}
+}
+
+void ACaveboundPlayerController::HidePauseMenu()
+{
+	if (PauseMenuWidget && PauseMenuWidget->IsInViewport())
+	{
+		PauseMenuWidget->RemoveFromParent();
+	}
+}
+
+void ACaveboundPlayerController::TogglePauseMenu()
+{
+	if (bPauseMenuOpen)
+	{
+		ResumeGame();
+	}
+	else
+	{
+		PauseGame();
+	}
+}
+
+void ACaveboundPlayerController::PauseGame()
+{
+	if (bPauseMenuOpen)
+	{
+		return;
+	}
+
+	bPauseMenuOpen = true;
+	bOrbitingCamera = false;
+	UGameplayStatics::SetGamePaused(this, true);
+	ShowPauseMenu();
+	ApplyPauseInputMode();
+}
+
+void ACaveboundPlayerController::ResumeGame()
+{
+	if (!bPauseMenuOpen)
+	{
+		return;
+	}
+
+	bPauseMenuOpen = false;
+	HidePauseMenu();
+	UGameplayStatics::SetGamePaused(this, false);
+	ApplyGameplayInputMode();
+}
+
+void ACaveboundPlayerController::QuitGame()
+{
+	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+}
+
 void ACaveboundPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
@@ -114,12 +204,32 @@ void ACaveboundPlayerController::SetupInputComponent()
 	if (InputComponent)
 	{
 		InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ACaveboundPlayerController::OnClickMove);
+
+		// bExecuteWhenPaused so Escape/Tab can resume while the world is paused
+		FInputKeyBinding& EscapeBinding = InputComponent->BindKey(
+			EKeys::Escape,
+			IE_Pressed,
+			this,
+			&ACaveboundPlayerController::TogglePauseMenu);
+		EscapeBinding.bExecuteWhenPaused = true;
+
+		FInputKeyBinding& TabBinding = InputComponent->BindKey(
+			EKeys::Tab,
+			IE_Pressed,
+			this,
+			&ACaveboundPlayerController::TogglePauseMenu);
+		TabBinding.bExecuteWhenPaused = true;
 	}
 }
 
 void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+
+	if (bPauseMenuOpen)
+	{
+		return;
+	}
 
 	// Backup if Enhanced Input assets have no mapping: raw left-click still moves.
 	if (WasInputKeyJustPressed(EKeys::LeftMouseButton))
@@ -157,6 +267,11 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 
 void ACaveboundPlayerController::OnClickMove()
 {
+	if (bPauseMenuOpen)
+	{
+		return;
+	}
+
 	UWorld* World = GetWorld();
 	APawn* ControlledPawn = GetPawn();
 	if (!World || !ControlledPawn)

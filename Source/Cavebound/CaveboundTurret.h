@@ -35,6 +35,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetMaxHealth() const { return MaxHealth; }
 
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	int32 GetCost() const { return Cost; }
+
 	bool IsDestroyed() const { return Health <= 0.f; }
 
 protected:
@@ -47,6 +50,10 @@ protected:
 	// Placeholder mesh
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turret")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
+
+	// Wood spent to place this turret
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Turret")
+	int32 Cost = 150;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float MaxHealth = 150.f;
