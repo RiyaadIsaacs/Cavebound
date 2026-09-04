@@ -8,6 +8,7 @@
 
 class USceneComponent;
 class UStaticMeshComponent;
+class ACaveboundBaseEnemy;
 
 /**
  * Placeable defender the enemies will attack
@@ -21,6 +22,7 @@ public:
 	ACaveboundTurret();
 
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
 
 	// HUD popup bar on mouse hover
 	virtual float GetHoverHealth_Implementation() const override { return Health; }
@@ -44,10 +46,13 @@ protected:
 	void PlayDamageFlash();
 	virtual void OnDestroyedByDamage();
 
+	ACaveboundBaseEnemy* FindNearestEnemy() const;
+	void TryFireAtNearestEnemy();
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turret")
 	TObjectPtr<USceneComponent> SceneRoot;
 
-	// Placeholder mesh
+	// Placeholder mesh 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turret")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
 
@@ -62,10 +67,34 @@ protected:
 	float Health = 150.f;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
+	bool bAutoFire = true;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float AttackRange = 1200.f;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float FireInterval = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (MakeEditWidget = true))
+	FVector FirePointOffset = FVector(80.f, 0.f, 100.f);
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float ProjectileDamage = 10.f;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float ProjectileSpeed = 1200.f;
+
+	
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	TSubclassOf<AActor> ProjectileClass;
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
 	float HitFlashDuration = 0.15f;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	FLinearColor HitFlashColor = FLinearColor(1.f, 0.f, 0.f);
 
 	FTimerHandle HitFlashTimer;
+
+	float FireTime = 0.f;
 };

@@ -14,7 +14,7 @@ ACaveboundEnemy::ACaveboundEnemy()
 	}
 
 	// Defaults for this enemy type
-	MaxHealth = 40.f;
+	MaxHealth = 60.f;
 	Health = MaxHealth;
 	MoveSpeed = 280.f;
 	AttackDamage = 8.f;
