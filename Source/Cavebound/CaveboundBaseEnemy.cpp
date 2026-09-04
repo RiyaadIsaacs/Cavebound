@@ -1,9 +1,11 @@
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundTree.h"
+#include "CaveboundTurret.h"
 #include "Components/SplineComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
 
 ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 {
@@ -20,7 +22,7 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 	Health = MaxHealth;
 }
 
-// Initialize the enemy to walk along a spline and attack the tree
+// Initialize the enemy to walk along a spline 
 void ACaveboundBaseEnemy::InitAlongPath(USplineComponent* Spline, ACaveboundTree* InTree)
 {
 	PathSpline = Spline;
@@ -76,10 +78,67 @@ void ACaveboundBaseEnemy::OnDeath()
 	Destroy();
 }
 
-bool ACaveboundBaseEnemy::IsInAttackRange() const
+ACaveboundTurret* ACaveboundBaseEnemy::FindNearestTurretInRange(float Range) const
 {
-	// Dist2D ignores height since tree mesh is taller than the enemy mesh
-	return Tree.IsValid() && FVector::Dist2D(GetActorLocation(), Tree->GetActorLocation()) <= AttackRange;
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	TArray<AActor*> FoundTurrets;
+	UGameplayStatics::GetAllActorsOfClass(World, ACaveboundTurret::StaticClass(), FoundTurrets);
+
+	ACaveboundTurret* Nearest = nullptr;
+	float BestDistance = Range;
+	const FVector MyLocation = GetActorLocation();
+
+	for (AActor* Actor : FoundTurrets)
+	{
+		ACaveboundTurret* Turret = Cast<ACaveboundTurret>(Actor);
+		if (!Turret || Turret->IsDestroyed())
+		{
+			continue;
+		}
+
+		const float Distance = FVector::Dist2D(MyLocation, Turret->GetActorLocation());
+		if (Distance <= BestDistance)
+		{
+			BestDistance = Distance;
+			Nearest = Turret;
+		}
+	}
+
+	return Nearest;
+}
+
+AActor* ACaveboundBaseEnemy::ResolveAttackTarget() const
+{
+	// Target turrets first 
+	if (ACaveboundTurret* Turret = FindNearestTurretInRange(TurretDetectRange))
+	{
+		return Turret;
+	}
+
+	ACaveboundTree* CurrentTree = Tree.Get();
+	if (CurrentTree && !CurrentTree->IsDestroyed()
+		&& IsInAttackRangeOf(CurrentTree))
+	{
+		return CurrentTree;
+	}
+
+	return nullptr;
+}
+
+bool ACaveboundBaseEnemy::IsInAttackRangeOf(const AActor* Target) const
+{
+	if (!IsValid(Target))
+	{
+		return false;
+	}
+
+	// Dist2D ignores height differences between meshes
+	return FVector::Dist2D(GetActorLocation(), Target->GetActorLocation()) <= AttackRange;
 }
 
 void ACaveboundBaseEnemy::Tick(float DeltaTime)
@@ -102,10 +161,22 @@ void ACaveboundBaseEnemy::Tick(float DeltaTime)
 		}
 	}
 
-	// Close enough to the tree: stop walking and chip health. Otherwise follow the spline
-	if (IsInAttackRange())
+	if (AActor* Target = ResolveAttackTarget())
 	{
-		AttackCurrentTarget(DeltaTime);
+		if (IsInAttackRangeOf(Target))
+		{
+			AttackCurrentTarget(DeltaTime);
+			return;
+		}
+
+		// Close enough to notice a turret, but still need to walk up to it
+		FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
+		ToTarget.Z = 0.f;
+		if (!ToTarget.IsNearlyZero())
+		{
+			AddActorWorldOffset(ToTarget.GetSafeNormal() * MoveSpeed * DeltaTime);
+			SetActorRotation(ToTarget.Rotation());
+		}
 		return;
 	}
 
@@ -155,17 +226,36 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 
 void ACaveboundBaseEnemy::AttackCurrentTarget(float DeltaTime)
 {
-	ACaveboundTree* Target = Tree.Get();
-	if (!Target || Target->IsDestroyed())
+	AActor* Target = ResolveAttackTarget();
+	if (!IsValid(Target))
 	{
 		return;
 	}
 
+	FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
+	ToTarget.Z = 0.f;
+	if (!ToTarget.IsNearlyZero())
+	{
+		SetActorRotation(ToTarget.Rotation());
+	}
+
 	// Accumulate time until AttackInterval, then deal one hit
 	AttackTime += DeltaTime;
-	if (AttackTime >= AttackInterval)
+	if (AttackTime < AttackInterval)
 	{
-		AttackTime = 0.f;
-		Target->ApplyDamage(AttackDamage);
+		return;
+	}
+
+	AttackTime = 0.f;
+
+	if (ACaveboundTurret* Turret = Cast<ACaveboundTurret>(Target))
+	{
+		Turret->ApplyDamage(AttackDamage);
+		return;
+	}
+
+	if (ACaveboundTree* TreeTarget = Cast<ACaveboundTree>(Target))
+	{
+		TreeTarget->ApplyDamage(AttackDamage);
 	}
 }

@@ -9,6 +9,7 @@
 class UStaticMeshComponent;
 class USplineComponent;
 class ACaveboundTree;
+class ACaveboundTurret;
 
 /**
  * Base enemy with different virtual functions for different behaviour overrides
@@ -45,13 +46,18 @@ protected:
 	// Walk along PathSpline. Possible flying / jumping types later
 	virtual void MoveAlongPath(float DeltaTime);
 
-	// Damage the tree on a timer
+	// Damage the current turret or tree on a timer
 	virtual void AttackCurrentTarget(float DeltaTime);
 
 	// Destroy() and maybe other VFX / sounds / particles
 	virtual void OnDeath();
 
-	bool IsInAttackRange() const;
+	// Prefer a live turret in detect range; otherwise the tree when close enough
+	AActor* ResolveAttackTarget() const;
+
+	ACaveboundTurret* FindNearestTurretInRange(float Range) const;
+
+	bool IsInAttackRangeOf(const AActor* Target) const;
 
 	void PlayDamageFlash();
 
@@ -73,6 +79,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AttackRange = 280.f;
+
+	// How far away a turret can be before enemies target them
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float TurretDetectRange = 750.f;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AttackInterval = 1.0f;
