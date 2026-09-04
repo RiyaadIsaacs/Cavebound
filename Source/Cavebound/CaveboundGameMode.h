@@ -39,6 +39,10 @@ public:
 
 	void AddWood(int32 Amount);
 
+	// Spend wood when placing a turret
+	UFUNCTION(BlueprintCallable, Category = "Cavebound")
+	bool UseWood(int32 Amount);
+
 	// Called by the tree when its health reaches 0. 
 	void HandleTreeDestroyed();
 

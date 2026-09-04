@@ -292,6 +292,17 @@ void ACaveboundGameMode::AddWood(int32 Amount)
 	Wood += Amount;
 }
 
+bool ACaveboundGameMode::UseWood(int32 Amount)
+{
+	if (bGameOver || Amount <= 0 || Wood < Amount)
+	{
+		return false;
+	}
+
+	Wood -= Amount;
+	return true;
+}
+
 void ACaveboundGameMode::HandleTreeDestroyed()
 {
 	bGameOver = true;
