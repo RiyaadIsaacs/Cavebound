@@ -56,6 +56,71 @@ void ACaveboundBaseEnemy::ApplyDamage(float Amount)
 	}
 }
 
+void ACaveboundBaseEnemy::ApplySlow(float SpeedMultiplier)
+{
+	UWorld* World = GetWorld();
+	if (!World || IsDead())
+	{
+		return;
+	}
+
+	const float Now = World->GetTimeSeconds();
+	if (Now - SlowRefreshTime > 0.2f)
+	{
+		ActiveSlowMultiplier = 1.f;
+	}
+
+	ActiveSlowMultiplier = FMath::Clamp(FMath::Min(ActiveSlowMultiplier, SpeedMultiplier), 0.f, 1.f);
+	SlowRefreshTime = Now;
+}
+
+float ACaveboundBaseEnemy::GetMoveSpeedScale() const
+{
+	const UWorld* World = GetWorld();
+	if (!World || World->GetTimeSeconds() - SlowRefreshTime > 0.2f)
+	{
+		return 1.f;
+	}
+
+	return ActiveSlowMultiplier;
+}
+
+bool ACaveboundBaseEnemy::CanBeSnared() const
+{
+	return !IsDead() && !bIsSnared && !bHasBeenSnared;
+}
+
+bool ACaveboundBaseEnemy::TrySnare(AActor* Source, float Duration)
+{
+	if (!CanBeSnared() || !IsValid(Source) || Duration <= 0.f)
+	{
+		return false;
+	}
+
+	bIsSnared = true;
+	bHasBeenSnared = true;
+	SnareSource = Source;
+	SnareTimeRemaining = Duration;
+	return true;
+}
+
+void ACaveboundBaseEnemy::ReleaseSnare(AActor* Source)
+{
+	if (SnareSource.Get() != Source)
+	{
+		return;
+	}
+
+	bIsSnared = false;
+	SnareSource = nullptr;
+	SnareTimeRemaining = 0.f;
+}
+
+bool ACaveboundBaseEnemy::IsSnaredBy(const AActor* Source) const
+{
+	return bIsSnared && SnareSource.Get() == Source;
+}
+
 void ACaveboundBaseEnemy::PlayDamageFlash()
 {
 	TArray<UStaticMeshComponent*> Meshes;
@@ -164,6 +229,31 @@ void ACaveboundBaseEnemy::Tick(float DeltaTime)
 		}
 	}
 
+	if (bIsSnared)
+	{
+		if (!SnareSource.IsValid())
+		{
+			bIsSnared = false;
+			SnareTimeRemaining = 0.f;
+		}
+		else
+		{
+			SnareTimeRemaining -= DeltaTime;
+			if (SnareTimeRemaining <= 0.f)
+			{
+				bIsSnared = false;
+				SnareSource = nullptr;
+				SnareTimeRemaining = 0.f;
+			}
+			else
+			{
+				return;
+			}
+		}
+	}
+
+	const float SpeedScale = GetMoveSpeedScale();
+
 	if (AActor* Target = ResolveAttackTarget())
 	{
 		if (IsInAttackRangeOf(Target))
@@ -177,7 +267,7 @@ void ACaveboundBaseEnemy::Tick(float DeltaTime)
 		ToTarget.Z = 0.f;
 		if (!ToTarget.IsNearlyZero())
 		{
-			AddActorWorldOffset(ToTarget.GetSafeNormal() * MoveSpeed * DeltaTime);
+			AddActorWorldOffset(ToTarget.GetSafeNormal() * MoveSpeed * SpeedScale * DeltaTime);
 			SetActorRotation(ToTarget.Rotation());
 		}
 		return;
@@ -204,14 +294,14 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 			ToTree.Z = 0.f;
 			if (ToTree.Size() > AttackRange)
 			{
-				AddActorWorldOffset(ToTree.GetSafeNormal() * MoveSpeed * DeltaTime);
+				AddActorWorldOffset(ToTree.GetSafeNormal() * MoveSpeed * GetMoveSpeedScale() * DeltaTime);
 			}
 		}
 		return;
 	}
 
 	// Move along the spline and don't overshoot the end
-	DistanceAlongSpline = FMath::Min(DistanceAlongSpline + MoveSpeed * DeltaTime, SplineLength);
+	DistanceAlongSpline = FMath::Min(DistanceAlongSpline + MoveSpeed * GetMoveSpeedScale() * DeltaTime, SplineLength);
 
 	const FVector PathPoint = Spline->GetLocationAtDistanceAlongSpline(
 		DistanceAlongSpline,

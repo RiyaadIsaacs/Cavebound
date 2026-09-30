@@ -7,6 +7,9 @@
 class UInputMappingContext;
 class UInputAction;
 class UUserWidget;
+class UCaveboundBuildMenu;
+class UCaveboundBuildPrompt;
+class UMaterialInterface;
 
 /**
  * Reads the mouse and tells the Character where to walk.
@@ -45,6 +48,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Cavebound|Pause")
 	void QuitGame();
 
+	// B at a free build slot opens the defender picker. The choice calls this.
+	bool PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<AActor> DefenderClass);
+
+	void CloseBuildMenu();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
@@ -66,6 +74,19 @@ protected:
 	void ApplyPauseInputMode();
 	void UpdateHoveredHealthTarget();
 
+	void HandleBuildKey();
+	void StripSlotPlaceKeys();
+	void OpenBuildMenu(AActor* Slot);
+	void UpdateBuildSlotPresentation();
+	void CollectInteractableSlots(TArray<AActor*>& OutSlots, AActor*& OutClosest) const;
+	void SetSlotHighlighted(AActor* Slot, bool bHighlighted);
+	bool GetSlotScreenPosition(const AActor* Slot, float Height, FVector2D& OutScreenPosition) const;
+	AActor* FindBuildSlotForMenu() const;
+	void ClearSlotOccupied(AActor* Slot);
+
+	UFUNCTION()
+	void HandlePlacedDefenderDestroyed(AActor* DestroyedActor);
+
 	// For assigning HUD 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> HUDWidgetClass;
@@ -84,6 +105,23 @@ protected:
 	void OnClickMove();
 
 	TWeakObjectPtr<AActor> HoveredHealthActor;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundBuildMenu> BuildMenu;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundBuildPrompt> BuildPrompt;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> SlotHighlightMaterial;
+
+	TWeakObjectPtr<AActor> MenuSlot;
+
+	TArray<TWeakObjectPtr<AActor>> HighlightedSlots;
+
+	// Defender actor -> the slot it was built on, so a destroyed defender frees the pad.
+	UPROPERTY()
+	TMap<TObjectPtr<AActor>, TObjectPtr<AActor>> DefendersToSlots;
 
 	bool bOrbitingCamera = false;
 	bool bPauseMenuOpen = false;

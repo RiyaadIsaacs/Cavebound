@@ -34,6 +34,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	virtual void ApplyDamage(float Amount);
 
+	// Slow while standing in a poison dome. 1 is full speed. Reapplied every frame the enemy stays inside.
+	void ApplySlow(float SpeedMultiplier);
+	float GetMoveSpeedScale() const;
+
+	// A snare may hold this enemy once. While held, they cannot move or attack.
+	bool CanBeSnared() const;
+	bool TrySnare(AActor* Source, float Duration);
+	void ReleaseSnare(AActor* Source);
+	bool IsSnared() const { return bIsSnared; }
+	bool IsSnaredBy(const AActor* Source) const;
+
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetHealth() const { return Health; }
 
@@ -106,4 +117,12 @@ protected:
 
 	// Time since last attack pulse
 	float AttackTime = 0.f;
+
+	float ActiveSlowMultiplier = 1.f;
+	float SlowRefreshTime = -1.f;
+
+	bool bIsSnared = false;
+	bool bHasBeenSnared = false;
+	TWeakObjectPtr<AActor> SnareSource;
+	float SnareTimeRemaining = 0.f;
 };
