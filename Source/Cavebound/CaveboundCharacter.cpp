@@ -1,7 +1,10 @@
 #include "CaveboundCharacter.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundTree.h"
+#include "Animation/AnimSequence.h"
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "UObject/ConstructorHelpers.h"
@@ -39,19 +42,96 @@ ACaveboundCharacter::ACaveboundCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
-	// Placeholder body (engine cube)
+	// Kept so older blueprints that still reference the placeholder do not fail to load.
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	VisualMesh->SetupAttachment(RootComponent);
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	VisualMesh->SetVisibility(false);
+	VisualMesh->SetHiddenInGame(true);
 
-	// Basic cube sizing through code, pretty cool
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(
-		TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (CubeMesh.Succeeded())
+	// Barbarian is about 240cm tall, with feet at the mesh origin.
+	GetCapsuleComponent()->SetCapsuleSize(42.f, 120.f);
+	GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -120.f));
+	GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> MeshAsset(
+		TEXT("/Game/Characters/Barbarian/Barbarian.Barbarian"));
+	if (MeshAsset.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(CubeMesh.Object);
-		VisualMesh->SetRelativeScale3D(FVector(0.6f, 0.6f, 1.8f)); // Actually set the cube mesh's size
+		BodyMesh = MeshAsset.Object;
+		GetMesh()->SetSkeletalMeshAsset(BodyMesh);
 	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> MaterialAsset(
+		TEXT("/Game/Characters/Barbarian/M_BarbarianColor.M_BarbarianColor"));
+	if (MaterialAsset.Succeeded())
+	{
+		BodyMaterial = MaterialAsset.Object;
+		GetMesh()->SetMaterial(0, BodyMaterial);
+	}
+
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> IdleAsset(
+		TEXT("/Game/Characters/Barbarian/Idle.Idle"));
+	if (IdleAsset.Succeeded())
+	{
+		IdleAnim = IdleAsset.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> WalkAsset(
+		TEXT("/Game/Characters/Barbarian/Walk.Walk"));
+	if (WalkAsset.Succeeded())
+	{
+		WalkAnim = WalkAsset.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> RunAsset(
+		TEXT("/Game/Characters/Barbarian/Run.Run"));
+	if (RunAsset.Succeeded())
+	{
+		RunAnim = RunAsset.Object;
+	}
+}
+
+void ACaveboundCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (VisualMesh)
+	{
+		VisualMesh->SetStaticMesh(nullptr);
+		VisualMesh->SetVisibility(false);
+		VisualMesh->SetHiddenInGame(true);
+	}
+
+	USkeletalMeshComponent* Body = GetMesh();
+	if (!Body)
+	{
+		return;
+	}
+
+	GetCapsuleComponent()->SetCapsuleSize(42.f, 120.f);
+	Body->SetRelativeLocation(FVector(0.f, 0.f, -120.f));
+	Body->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	if (BodyMesh)
+	{
+		Body->SetSkeletalMeshAsset(BodyMesh);
+	}
+
+	if (BodyMaterial)
+	{
+		const int32 SlotCount = FMath::Max(Body->GetNumMaterials(), 1);
+		for (int32 SlotIndex = 0; SlotIndex < SlotCount; ++SlotIndex)
+		{
+			Body->SetMaterial(SlotIndex, BodyMaterial);
+		}
+	}
+
+	Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	Body->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	UpdateLocomotion();
 }
 
 // Rotate the camera boom based on mouse movement while right clicking
@@ -159,27 +239,57 @@ void ACaveboundCharacter::Tick(float DeltaTime)
 		TryMine(DeltaTime);
 	}
 
-	if (!bHasMoveDestination)
+	if (bHasMoveDestination)
+	{
+		const FVector Current = GetActorLocation();
+		FVector ToTarget = MoveDestination - Current;
+		ToTarget.Z = 0.f;
+
+		// When walking to the tree, stop at mine range so we do not walk into the trunk.
+		float StopDistance = ArrivalDistance;
+		if (ACaveboundTree* Tree = TargetTree.Get())
+		{
+			StopDistance = Tree->GetMineRange();
+		}
+
+		if (ToTarget.Size() <= StopDistance)
+		{
+			bHasMoveDestination = false;
+		}
+		else
+		{
+			AddMovementInput(ToTarget.GetSafeNormal(), 1.f);
+		}
+	}
+
+	UpdateLocomotion();
+}
+
+void ACaveboundCharacter::UpdateLocomotion()
+{
+	USkeletalMeshComponent* Body = GetMesh();
+	if (!Body || !IdleAnim)
 	{
 		return;
 	}
 
-	const FVector Current = GetActorLocation();
-	FVector ToTarget = MoveDestination - Current;
-	ToTarget.Z = 0.f;
-
-	// When walking to the tree, stop at mine range so we do not walk into the trunk.
-	float StopDistance = ArrivalDistance;
-	if (ACaveboundTree* Tree = TargetTree.Get())
+	UAnimSequence* Desired = IdleAnim;
+	const float Speed = GetVelocity().Size2D();
+	if (Speed > 280.f && RunAnim)
 	{
-		StopDistance = Tree->GetMineRange();
+		Desired = RunAnim;
+	}
+	else if (Speed > 15.f && WalkAnim)
+	{
+		Desired = WalkAnim;
 	}
 
-	if (ToTarget.Size() <= StopDistance)
+	if (Desired == PlayingAnim)
 	{
-		bHasMoveDestination = false;
 		return;
 	}
 
-	AddMovementInput(ToTarget.GetSafeNormal(), 1.f);
+	PlayingAnim = Desired;
+	Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	Body->PlayAnimation(Desired, true);
 }

@@ -7,6 +7,9 @@
 class USpringArmComponent;
 class UCameraComponent;
 class UStaticMeshComponent;
+class USkeletalMesh;
+class UMaterialInterface;
+class UAnimSequence;
 class ACaveboundTree;
 
 /**
@@ -20,6 +23,7 @@ class CAVEBOUND_API ACaveboundCharacter : public ACharacter
 public:
 	ACaveboundCharacter();
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
 	// Called by the PlayerController when the player clicks the ground.
@@ -35,6 +39,7 @@ public:
 protected:
 	void StopMining();
 	void TryMine(float DeltaTime);
+	void UpdateLocomotion();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;
@@ -43,9 +48,26 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
 
-	// Placeholder cube so the player is visible before a real character mesh exists.
+	// Old placeholder body. Hidden now that the barbarian skeletal mesh is used.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mesh")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
+
+	UPROPERTY()
+	TObjectPtr<USkeletalMesh> BodyMesh;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> BodyMaterial;
+
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> IdleAnim;
+
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> WalkAnim;
+
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> RunAnim;
+
+	TObjectPtr<UAnimSequence> PlayingAnim;
 
 	// How close (cm) before the character stops walking.
 	UPROPERTY(EditAnywhere, Category = "Movement")
