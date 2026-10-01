@@ -3,4 +3,4 @@
 #include "Cavebound.h"
 #include "Modules/ModuleManager.h"
 
-IMPLEMENT_PRIMARY_GAME_MODULE( FDefaultGameModuleImpl, Cavebound, "Cavebound" );
+IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, Cavebound, "Cavebound");

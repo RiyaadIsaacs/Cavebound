@@ -2,6 +2,8 @@
 #include "CaveboundGameMode.h"
 #include "CaveboundTree.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/AnimSingleNodeInstance.h"
+#include "Animation/BlendSpace1D.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -91,6 +93,13 @@ ACaveboundCharacter::ACaveboundCharacter()
 	{
 		RunAnim = RunAsset.Object;
 	}
+
+	static ConstructorHelpers::FObjectFinder<UBlendSpace> BlendAsset(
+		TEXT("/Game/Characters/Barbarian/BS_PlayerMove.BS_PlayerMove"));
+	if (BlendAsset.Succeeded())
+	{
+		LocomotionBlend = BlendAsset.Object;
+	}
 }
 
 void ACaveboundCharacter::BeginPlay()
@@ -131,7 +140,24 @@ void ACaveboundCharacter::BeginPlay()
 
 	Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 	Body->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
-	UpdateLocomotion();
+
+#if WITH_EDITOR
+	// The saved blend space has samples but no segment graph, which plays as a T-pose.
+	if (LocomotionBlend)
+	{
+		LocomotionBlend->ResampleData();
+		if (LocomotionBlend->GetBlendSpaceData().IsEmpty())
+		{
+			LocomotionBlend = nullptr;
+		}
+	}
+#endif
+
+	if (LocomotionBlend)
+	{
+		Body->PlayAnimation(LocomotionBlend, true);
+	}
+	UpdateLocomotion(0.f);
 }
 
 // Rotate the camera boom based on mouse movement while right clicking
@@ -262,13 +288,32 @@ void ACaveboundCharacter::Tick(float DeltaTime)
 		}
 	}
 
-	UpdateLocomotion();
+	UpdateLocomotion(DeltaTime);
 }
 
-void ACaveboundCharacter::UpdateLocomotion()
+void ACaveboundCharacter::UpdateLocomotion(float DeltaTime)
 {
 	USkeletalMeshComponent* Body = GetMesh();
-	if (!Body || !IdleAnim)
+	if (!Body)
+	{
+		return;
+	}
+
+	if (LocomotionBlend)
+	{
+		if (UAnimSingleNodeInstance* Node = Body->GetSingleNodeInstance())
+		{
+			const float TargetAxis = FMath::GetMappedRangeValueClamped(
+				FVector2D(0.f, 600.f),
+				FVector2D(0.f, 100.f),
+				GetVelocity().Size2D());
+			SmoothedLocomotion = FMath::FInterpTo(SmoothedLocomotion, TargetAxis, DeltaTime, LocomotionBlendSpeed);
+			Node->SetBlendSpacePosition(FVector(SmoothedLocomotion, 0.f, 0.f));
+		}
+		return;
+	}
+
+	if (!IdleAnim)
 	{
 		return;
 	}
