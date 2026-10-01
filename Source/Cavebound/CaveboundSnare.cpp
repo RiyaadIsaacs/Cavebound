@@ -12,7 +12,6 @@
 
 ACaveboundSnare::ACaveboundSnare()
 {
-	// This one holds an enemy. It does not shoot arrows.
 	bAutoFire = false;
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> cylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
@@ -22,7 +21,7 @@ ACaveboundSnare::ACaveboundSnare()
 		RopeMesh = cylinderMesh.Object;
 	}
 
-	// A tall thin post. The engine cylinder is 100 tall, so scale Z is the height in those units.
+	// Mesh dimensions
 	const float postRadius = 28.f;
 	VisualMesh->SetRelativeScale3D(FVector(postRadius / 50.f, postRadius / 50.f, PostHeight / 100.f));
 	VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, PostHeight * 0.5f));
@@ -104,7 +103,7 @@ void ACaveboundSnare::UpdateSnare()
 		ClearRope();
 	}
 
-	// Grab the closest enemy that has never been caught before.
+	// Snares enemy that hasnt been snared
 	if (ACaveboundBaseEnemy* closestEnemy = FindSnareTarget())
 	{
 		if (closestEnemy->TrySnare(this, TrapDuration))
@@ -175,7 +174,6 @@ void ACaveboundSnare::ShowRope(ACaveboundBaseEnemy* CaughtEnemy)
 		return;
 	}
 
-	// The rope lives in world space, so its points can sit on the post and on the enemy.
 	RopeSpline = NewObject<USplineComponent>(this);
 	RopeSpline->SetMobility(EComponentMobility::Movable);
 	RopeSpline->RegisterComponent();
@@ -189,7 +187,7 @@ void ACaveboundSnare::ShowRope(ACaveboundBaseEnemy* CaughtEnemy)
 	ropePoints.Add(FMath::Lerp(postTop, aboveEnemy, 0.5f));
 	ropePoints.Add(aboveEnemy);
 
-	// Spiral down around the body. Three turns, from the shoulders to the feet.
+	// Spline wraps around enemy
 	const int wraps = 3;
 	const int stepsPerWrap = 8;
 	const float wrapRadius = 80.f;
@@ -215,7 +213,7 @@ void ACaveboundSnare::ShowRope(ACaveboundBaseEnemy* CaughtEnemy)
 	}
 	RopeSpline->UpdateSpline();
 
-	// A thin cylinder on each step of the path. The mesh's long side is Z.
+	// Builds mesh along spline
 	const float ropeThickness = 0.08f;
 	const int pointCount = RopeSpline->GetNumberOfSplinePoints();
 	for (int pointIndex = 0; pointIndex < pointCount - 1; ++pointIndex)
