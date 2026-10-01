@@ -721,6 +721,26 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 		return false;
 	}
 
+	// BP_DefenderBase.SetOccupied reads Terrain — assign the procedural terrain if the BP exposes it
+	if (FObjectProperty* TerrainProp = FindFProperty<FObjectProperty>(Spawned->GetClass(), TEXT("Terrain")))
+	{
+		if (!TerrainProp->GetObjectPropertyValue_InContainer(Spawned))
+		{
+			UClass* TerrainClass = LoadClass<AActor>(
+				nullptr,
+				TEXT("/Game/Blueprints/BP_ProceduralTerrain.BP_ProceduralTerrain_C"));
+			if (TerrainClass)
+			{
+				TArray<AActor*> Terrains;
+				UGameplayStatics::GetAllActorsOfClass(World, TerrainClass, Terrains);
+				if (Terrains.Num() > 0 && Terrains[0])
+				{
+					TerrainProp->SetObjectPropertyValue_InContainer(Spawned, Terrains[0]);
+				}
+			}
+		}
+	}
+
 	if (FBoolProperty* OccupiedWrite = FindFProperty<FBoolProperty>(Slot->GetClass(), TEXT("IsOccupied")))
 	{
 		OccupiedWrite->SetPropertyValue_InContainer(Slot, true);

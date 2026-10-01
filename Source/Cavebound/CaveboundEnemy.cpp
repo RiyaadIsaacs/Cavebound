@@ -14,6 +14,7 @@ ACaveboundEnemy::ACaveboundEnemy()
 	}
 
 	// Defaults for this enemy type
+	MinDifficultyToSpawn = 0;
 	MaxHealth = 60.f;
 	Health = MaxHealth;
 	MoveSpeed = 280.f;

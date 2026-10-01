@@ -51,29 +51,36 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetMaxHealth() const { return MaxHealth; }
 
+	int32 GetMinDifficultyToSpawn() const { return MinDifficultyToSpawn; }
+
+	float GetDistanceAlongSpline() const { return DistanceAlongSpline; }
+
 	bool IsDead() const { return Health <= 0.f; }
 
 protected:
-	// Walk along PathSpline. Possible flying / jumping types later
+	// Walk along PathSpline
 	virtual void MoveAlongPath(float DeltaTime);
-
 	// Damage the current turret or tree on a timer
 	virtual void AttackCurrentTarget(float DeltaTime);
-
-	// Destroy() and maybe other VFX / sounds / particles
 	virtual void OnDeath();
 
-	// Prefer a live turret in detect range; otherwise the tree when close enough
-	AActor* ResolveAttackTarget() const;
+	// Prefer turrets in detect range, else the tree when in attack range. Brute overrides.
+	virtual AActor* ResolveAttackTarget() const;
 
 	ACaveboundTurret* FindNearestTurretInRange(float Range) const;
-
 	bool IsInAttackRangeOf(const AActor* Target) const;
-
 	void PlayDamageFlash();
+
+	// Separation + light alignment/cohesion projected onto the path right vector
+	float ComputeBoidLaneOffset(const FVector& PathPoint, const FVector& PathRight) const;
+	float ComputeForwardStagger() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mesh")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
+
+	// Spawner only picks this type when DifficultyScore >= this value
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Spawn")
+	int32 MinDifficultyToSpawn = 0;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float MaxHealth = 40.f;
@@ -107,6 +114,30 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	FLinearColor HitFlashColor = FLinearColor(1.f, 0.f, 0.f);
 
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	bool bUseBoids = true;
+
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float SeparationRadius = 180.f;
+
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float SeparationStrength = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float AlignmentStrength = 0.15f;
+
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float CohesionStrength = 0.1f;
+
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float MaxLaneOffset = 150.f;
+
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float ForwardStaggerDistance = 80.f;
+
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float ForwardStaggerStrength = 0.35f;
+
 	FTimerHandle HitFlashTimer;
 
 	TWeakObjectPtr<USplineComponent> PathSpline;
@@ -114,10 +145,8 @@ protected:
 
 	// How far along the spline we have walked (cm)
 	float DistanceAlongSpline = 0.f;
-
 	// Time since last attack pulse
 	float AttackTime = 0.f;
-
 	float ActiveSlowMultiplier = 1.f;
 	float SlowRefreshTime = -1.f;
 
