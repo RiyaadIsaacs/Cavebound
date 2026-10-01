@@ -116,7 +116,6 @@ void ACaveboundGameMode::CollectPathSplines()
 				continue;
 			}
 
-			const FString SplineName = Spline->GetName();
 			// BP_ProceduralTerrain names them Path1 / Path2 / Path3
 			if (Spline->GetName().Contains(TEXT("Path")))
 			{

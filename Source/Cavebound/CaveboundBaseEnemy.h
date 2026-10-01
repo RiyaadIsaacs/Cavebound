@@ -13,6 +13,7 @@ class ACaveboundTurret;
 
 /**
  * Base enemy with different virtual functions for different behaviour overrides
+ * and path-constrained boids so groups do not stack on the spline.
  */
 UCLASS(Abstract, Blueprintable)
 class CAVEBOUND_API ACaveboundBaseEnemy : public AActor, public ICaveboundHoverHealth
@@ -51,6 +52,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetMaxHealth() const { return MaxHealth; }
 
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	int32 GetMinDifficultyToSpawn() const { return MinDifficultyToSpawn; }
 
 	float GetDistanceAlongSpline() const { return DistanceAlongSpline; }
