@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+class UMeshComponent;
 class UStaticMeshComponent;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
@@ -18,4 +19,6 @@ public:
 		float Duration);
 
 	static void ClearFlash(const TArray<UStaticMeshComponent*>& Meshes);
+
+	static void FlashComponent(UObject* WorldContext, UMeshComponent* Mesh, FTimerHandle& TimerHandle, FLinearColor FlashColor, float Duration);
 };

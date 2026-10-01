@@ -1,4 +1,5 @@
 #include "CaveboundDamageFlash.h"
+#include "Components/MeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -89,6 +90,39 @@ void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStat
 			{
 				Mesh->SetOverlayMaterial(nullptr);
 			}
+		}
+	});
+
+	World->GetTimerManager().SetTimer(TimerHandle, RestoreDelegate, Duration, false);
+}
+
+void FCaveboundDamageFlash::FlashComponent(UObject* WorldContext, UMeshComponent* Mesh, FTimerHandle& TimerHandle, FLinearColor FlashColor, float Duration)
+{
+	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!World || !IsValid(Mesh) || Duration <= 0.f)
+	{
+		return;
+	}
+
+	World->GetTimerManager().ClearTimer(TimerHandle);
+
+	UMaterialInstanceDynamic* RedMID = GetOrCreateRedMID(WorldContext);
+	if (!RedMID)
+	{
+		return;
+	}
+
+	RedMID->SetVectorParameterValue(FName(TEXT("Color")), FlashColor);
+	Mesh->SetOverlayMaterial(RedMID);
+
+	AActor* Owner = Cast<AActor>(WorldContext);
+	TWeakObjectPtr<UMeshComponent> MeshPtr = Mesh;
+	FTimerDelegate RestoreDelegate;
+	RestoreDelegate.BindWeakLambda(Owner, [MeshPtr]()
+	{
+		if (UMeshComponent* MeshToClear = MeshPtr.Get())
+		{
+			MeshToClear->SetOverlayMaterial(nullptr);
 		}
 	});
 

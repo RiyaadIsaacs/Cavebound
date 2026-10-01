@@ -332,6 +332,11 @@ void ACaveboundBaseEnemy::AttackCurrentTarget(float DeltaTime)
 		SetActorRotation(ToTarget.Rotation());
 	}
 
+	if (!CanAttack())
+	{
+		return;
+	}
+
 	// Accumulate time until AttackInterval, then deal one hit
 	AttackTime += DeltaTime;
 	if (AttackTime < AttackInterval)
@@ -340,6 +345,7 @@ void ACaveboundBaseEnemy::AttackCurrentTarget(float DeltaTime)
 	}
 
 	AttackTime = 0.f;
+	OnMeleeStrike();
 
 	if (ACaveboundTurret* Turret = Cast<ACaveboundTurret>(Target))
 	{
