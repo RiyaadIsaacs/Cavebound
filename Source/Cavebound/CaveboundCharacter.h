@@ -10,6 +10,7 @@ class UStaticMeshComponent;
 class USkeletalMesh;
 class UMaterialInterface;
 class UAnimSequence;
+class UBlendSpace;
 class ACaveboundTree;
 
 /**
@@ -39,7 +40,7 @@ public:
 protected:
 	void StopMining();
 	void TryMine(float DeltaTime);
-	void UpdateLocomotion();
+	void UpdateLocomotion(float DeltaTime);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;
@@ -67,7 +68,17 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> RunAnim;
 
+	UPROPERTY()
+	TObjectPtr<UBlendSpace> LocomotionBlend;
+
 	TObjectPtr<UAnimSequence> PlayingAnim;
+
+	// Smoothed 0-100 blend input so idle, walk, and run crossfade.
+	float SmoothedLocomotion = 0.f;
+
+	// How quickly idle, walk, and run blend together. Higher is snappier.
+	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0.1"))
+	float LocomotionBlendSpeed = 1.f;
 
 	// How close (cm) before the character stops walking.
 	UPROPERTY(EditAnywhere, Category = "Movement")
