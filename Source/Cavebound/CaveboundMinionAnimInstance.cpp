@@ -6,134 +6,151 @@
 
 void UCaveboundMinionAnimInstance::SetLocomotionSpeed(float Speed)
 {
+	// Save the speed so the walk blend space can read it.
 	LocomotionSpeed = Speed;
 }
 
 void UCaveboundMinionAnimInstance::SetDead(bool bDead)
 {
+	// The blend node treats true as the walk pose and false as death.
+	// Flip the value so SetDead(true) actually plays death.
 	bIsDead = !bDead;
 }
 
 void UCaveboundMinionAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
+
+	// Start on the walk pose, then make sure the upper body is set up.
 	bIsDead = true;
 	EnsureUpperBodyLayer();
 }
 
 void UCaveboundMinionAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
+	// Fix the upper body every frame before the animation plays.
 	EnsureUpperBodyLayer();
 	Super::NativeUpdateAnimation(DeltaSeconds);
 }
 
 void UCaveboundMinionAnimInstance::EnsureUpperBodyLayer()
 {
-	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(GetClass());
-	if (!AnimClass)
+	// Find the animation nodes that the blueprint already created.
+	IAnimClassInterface* animationClass = IAnimClassInterface::GetFromClass(GetClass());
+	if (!animationClass)
 	{
 		return;
 	}
 
-	FAnimNode_BlendSpacePlayerBase* Locomotion = nullptr;
-	FAnimNode_Slot* UpperSlot = nullptr;
-	FAnimNode_LayeredBoneBlend* Layer = nullptr;
+	FAnimNode_BlendSpacePlayerBase* walkAnimNode = nullptr;
+	FAnimNode_Slot* upperBodySlot = nullptr;
+	FAnimNode_LayeredBoneBlend* upperBodyBlend = nullptr;
 
-	for (const FStructProperty* Property : AnimClass->GetAnimNodeProperties())
+	for (const FStructProperty* nodeProperty : animationClass->GetAnimNodeProperties())
 	{
-		if (!Property || !Property->Struct)
+		if (!nodeProperty || !nodeProperty->Struct)
 		{
 			continue;
 		}
 
-		if (Property->Struct->IsChildOf(FAnimNode_BlendSpacePlayerBase::StaticStruct()))
+		// The first node is the idle / walk / run blend.
+		if (nodeProperty->Struct->IsChildOf(FAnimNode_BlendSpacePlayerBase::StaticStruct()))
 		{
-			Locomotion = Property->ContainerPtrToValuePtr<FAnimNode_BlendSpacePlayerBase>(this);
+			walkAnimNode = nodeProperty->ContainerPtrToValuePtr<FAnimNode_BlendSpacePlayerBase>(this);
 		}
-		else if (Property->Struct == FAnimNode_Slot::StaticStruct())
+		// The slot named UpperBody is where hit and punch animations play.
+		else if (nodeProperty->Struct == FAnimNode_Slot::StaticStruct())
 		{
-			FAnimNode_Slot* SlotNode = Property->ContainerPtrToValuePtr<FAnimNode_Slot>(this);
-			if (SlotNode && SlotNode->SlotName == TEXT("UpperBody"))
+			FAnimNode_Slot* foundSlot = nodeProperty->ContainerPtrToValuePtr<FAnimNode_Slot>(this);
+			if (foundSlot && foundSlot->SlotName == TEXT("UpperBody"))
 			{
-				UpperSlot = SlotNode;
+				upperBodySlot = foundSlot;
 			}
 		}
-		else if (Property->Struct == FAnimNode_LayeredBoneBlend::StaticStruct())
+		// This blend puts the slot on the spine and leaves the legs on the walk.
+		else if (nodeProperty->Struct == FAnimNode_LayeredBoneBlend::StaticStruct())
 		{
-			Layer = Property->ContainerPtrToValuePtr<FAnimNode_LayeredBoneBlend>(this);
+			upperBodyBlend = nodeProperty->ContainerPtrToValuePtr<FAnimNode_LayeredBoneBlend>(this);
 		}
 	}
 
-	if (UpperSlot)
+	// Keep the slot's source as the walk animation when nothing else is playing.
+	if (upperBodySlot)
 	{
-		UpperSlot->bAlwaysUpdateSourcePose = true;
-		if (Locomotion && UpperSlot->Source.GetLinkNode() != Locomotion)
+		upperBodySlot->bAlwaysUpdateSourcePose = true;
+		if (walkAnimNode && upperBodySlot->Source.GetLinkNode() != walkAnimNode)
 		{
-			UpperSlot->Source.SetLinkNode(Locomotion);
+			upperBodySlot->Source.SetLinkNode(walkAnimNode);
 		}
 	}
 
-	if (!Layer)
+	if (!upperBodyBlend)
 	{
 		return;
 	}
 
-	if (Layer->BlendPoses.Num() == 0)
+	// If there is no pose to blend, clear leftover weights so the game does not crash.
+	if (upperBodyBlend->BlendPoses.Num() == 0)
 	{
-		if (Layer->BlendWeights.Num() != 0 || Layer->LayerSetup.Num() != 0)
+		if (upperBodyBlend->BlendWeights.Num() != 0 || upperBodyBlend->LayerSetup.Num() != 0)
 		{
-			Layer->BlendWeights.Reset();
-			Layer->LayerSetup.Reset();
-			Layer->InvalidatePerBoneBlendWeights();
+			upperBodyBlend->BlendWeights.Reset();
+			upperBodyBlend->LayerSetup.Reset();
+			upperBodyBlend->InvalidatePerBoneBlendWeights();
 		}
 		return;
 	}
 
-	if (UpperSlot && Layer->BlendPoses[0].GetLinkNode() != UpperSlot)
+	// The first blend pose should be the upper body slot.
+	if (upperBodySlot && upperBodyBlend->BlendPoses[0].GetLinkNode() != upperBodySlot)
 	{
-		Layer->BlendPoses[0].SetLinkNode(UpperSlot);
+		upperBodyBlend->BlendPoses[0].SetLinkNode(upperBodySlot);
 	}
 
-	const int32 NumPoses = Layer->BlendPoses.Num();
-	bool bChanged = Layer->LayerSetup.Num() != NumPoses || Layer->BlendWeights.Num() != NumPoses;
-	Layer->LayerSetup.SetNum(NumPoses);
-	Layer->BlendWeights.SetNum(NumPoses);
+	// One weight and one bone filter for each pose.
+	const int32 numberOfPoses = upperBodyBlend->BlendPoses.Num();
+	bool boneSetupChanged = upperBodyBlend->LayerSetup.Num() != numberOfPoses || upperBodyBlend->BlendWeights.Num() != numberOfPoses;
+	upperBodyBlend->LayerSetup.SetNum(numberOfPoses);
+	upperBodyBlend->BlendWeights.SetNum(numberOfPoses);
 
-	const bool bOverlayActive = IsSlotActive(TEXT("UpperBody"));
-	for (int32 Index = 0; Index < Layer->BlendWeights.Num(); ++Index)
+	// Show the hit or punch only while that slot is playing. Otherwise the upper body keeps walking.
+	const bool bHitOrAttackIsPlaying = IsSlotActive(TEXT("UpperBody"));
+	for (int32 poseIndex = 0; poseIndex < upperBodyBlend->BlendWeights.Num(); ++poseIndex)
 	{
-		const float DesiredWeight = (Index == 0 && bOverlayActive) ? 1.f : 0.f;
-		if (!FMath::IsNearlyEqual(Layer->BlendWeights[Index], DesiredWeight))
+		const float wantedWeight = (poseIndex == 0 && bHitOrAttackIsPlaying) ? 1.f : 0.f;
+		if (!FMath::IsNearlyEqual(upperBodyBlend->BlendWeights[poseIndex], wantedWeight))
 		{
-			Layer->BlendWeights[Index] = DesiredWeight;
+			upperBodyBlend->BlendWeights[poseIndex] = wantedWeight;
 		}
 	}
 
-	FInputBlendPose& UpperBody = Layer->LayerSetup[0];
-	const bool bFilterWrong = UpperBody.BranchFilters.Num() != 1
-		|| UpperBody.BranchFilters[0].BoneName != TEXT("spine")
-		|| UpperBody.BranchFilters[0].BlendDepth != 0;
-	if (bFilterWrong)
+	// Only bones from the spine upward use the hit or punch. The legs stay on the walk.
+	FInputBlendPose& upperBodyBones = upperBodyBlend->LayerSetup[0];
+	const bool spineFilterIsWrong = upperBodyBones.BranchFilters.Num() != 1
+		|| upperBodyBones.BranchFilters[0].BoneName != TEXT("spine")
+		|| upperBodyBones.BranchFilters[0].BlendDepth != 0;
+	if (spineFilterIsWrong)
 	{
-		UpperBody.BranchFilters.Reset();
-		FBranchFilter Filter;
-		Filter.BoneName = TEXT("spine");
-		Filter.BlendDepth = 0;
-		UpperBody.BranchFilters.Add(Filter);
-		bChanged = true;
+		upperBodyBones.BranchFilters.Reset();
+		FBranchFilter spineFilter;
+		spineFilter.BoneName = TEXT("spine");
+		spineFilter.BlendDepth = 0;
+		upperBodyBones.BranchFilters.Add(spineFilter);
+		boneSetupChanged = true;
 	}
 
-	for (int32 Index = 1; Index < Layer->LayerSetup.Num(); ++Index)
+	// Extra layers are unused. Clear them so they cannot cover the whole body.
+	for (int32 poseIndex = 1; poseIndex < upperBodyBlend->LayerSetup.Num(); ++poseIndex)
 	{
-		if (Layer->LayerSetup[Index].BranchFilters.Num() > 0)
+		if (upperBodyBlend->LayerSetup[poseIndex].BranchFilters.Num() > 0)
 		{
-			Layer->LayerSetup[Index].BranchFilters.Reset();
-			bChanged = true;
+			upperBodyBlend->LayerSetup[poseIndex].BranchFilters.Reset();
+			boneSetupChanged = true;
 		}
 	}
 
-	if (bChanged)
+	if (boneSetupChanged)
 	{
-		Layer->InvalidatePerBoneBlendWeights();
+		upperBodyBlend->InvalidatePerBoneBlendWeights();
 	}
 }

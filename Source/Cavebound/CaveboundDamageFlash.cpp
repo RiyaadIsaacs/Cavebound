@@ -98,33 +98,37 @@ void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStat
 
 void FCaveboundDamageFlash::FlashComponent(UObject* WorldContext, UMeshComponent* Mesh, FTimerHandle& TimerHandle, FLinearColor FlashColor, float Duration)
 {
-	UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
-	if (!World || !IsValid(Mesh) || Duration <= 0.f)
+	// Need a world and a mesh, and the flash has to last longer than nothing.
+	UWorld* world = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!world || !IsValid(Mesh) || Duration <= 0.f)
 	{
 		return;
 	}
 
-	World->GetTimerManager().ClearTimer(TimerHandle);
+	// A new hit restarts the flash instead of stacking timers.
+	world->GetTimerManager().ClearTimer(TimerHandle);
 
-	UMaterialInstanceDynamic* RedMID = GetOrCreateRedMID(WorldContext);
-	if (!RedMID)
+	UMaterialInstanceDynamic* flashMaterial = GetOrCreateRedMID(WorldContext);
+	if (!flashMaterial)
 	{
 		return;
 	}
 
-	RedMID->SetVectorParameterValue(FName(TEXT("Color")), FlashColor);
-	Mesh->SetOverlayMaterial(RedMID);
+	// Paint the overlay and put it on the mesh.
+	flashMaterial->SetVectorParameterValue(FName(TEXT("Color")), FlashColor);
+	Mesh->SetOverlayMaterial(flashMaterial);
 
-	AActor* Owner = Cast<AActor>(WorldContext);
-	TWeakObjectPtr<UMeshComponent> MeshPtr = Mesh;
-	FTimerDelegate RestoreDelegate;
-	RestoreDelegate.BindWeakLambda(Owner, [MeshPtr]()
+	// Take the color back off after the flash time is over.
+	AActor* ownerActor = Cast<AActor>(WorldContext);
+	TWeakObjectPtr<UMeshComponent> meshToFlash = Mesh;
+	FTimerDelegate clearFlashLater;
+	clearFlashLater.BindWeakLambda(ownerActor, [meshToFlash]()
 	{
-		if (UMeshComponent* MeshToClear = MeshPtr.Get())
+		if (UMeshComponent* hitMesh = meshToFlash.Get())
 		{
-			MeshToClear->SetOverlayMaterial(nullptr);
+			hitMesh->SetOverlayMaterial(nullptr);
 		}
 	});
 
-	World->GetTimerManager().SetTimer(TimerHandle, RestoreDelegate, Duration, false);
+	world->GetTimerManager().SetTimer(TimerHandle, clearFlashLater, Duration, false);
 }

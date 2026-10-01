@@ -3,14 +3,16 @@
 
 ACaveboundCannon::ACaveboundCannon()
 {
+	// Bigger sphere so the cannon reads as the heavy defender.
 	VisualMesh->SetRelativeScale3D(FVector(1.35f, 1.35f, 1.35f));
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	if (SphereMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> sphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (sphereMesh.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(SphereMesh.Object);
+		VisualMesh->SetStaticMesh(sphereMesh.Object);
 	}
 
+	// Costs the most, shoots slowly, and hits hard from far away.
 	Cost = 280;
 	MaxHealth = 220.f;
 	Health = MaxHealth;

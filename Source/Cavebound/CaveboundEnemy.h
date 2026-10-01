@@ -57,13 +57,18 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UAnimMontage> MeleeMontage;
 
-	// How quickly idle, walk, and run blend when speed changes. Higher is snappier.
+	// How fast the walk animation catches up when the minion speeds up or slows down.
 	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0.1"))
 	float LocomotionBlendSpeed = 4.f;
 
-	float SmoothedSpeed = 0.f;
-	bool bHitReacting = false;
+	// The speed we show. It eases toward the real move speed so the blend is not instant.
+	float smoothedMoveSpeed = 0.f;
+
+	// True while the hit animation is playing. The minion cannot swing during this.
+	bool bIsPlayingHitAnimation = false;
 
 	FTimerHandle BodyFlashTimer;
 	FTimerHandle DeathTimer;
+
+	void RemoveAfterDeathAnimation();
 };

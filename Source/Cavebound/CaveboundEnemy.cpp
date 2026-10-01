@@ -11,6 +11,7 @@
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
+// The assets the minion uses. Mesh, walk blueprint, death clip, hit clip, and punch clip.
 namespace CaveboundMinionPaths
 {
 	const TCHAR* Mesh = TEXT("/Game/Characters/Skeleton/Skeleton_Minion.Skeleton_Minion");
@@ -22,14 +23,16 @@ namespace CaveboundMinionPaths
 
 ACaveboundEnemy::ACaveboundEnemy()
 {
-	// Keep the actor origin on the path. The minion's feet are at the mesh origin.
+	// Feet sit on the path, so we do not lift the actor extra.
 	PathHeightOffset = 0.f;
 
+	// The old cube mesh stays off. The skeleton is the body you see.
 	VisualMesh->SetVisibility(false);
 	VisualMesh->SetHiddenInGame(true);
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	VisualMesh->SetCastShadow(false);
 
+	// A hidden box so arrows can still hit the minion.
 	HitVolume = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HitVolume"));
 	HitVolume->SetupAttachment(VisualMesh);
 	HitVolume->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
@@ -49,6 +52,7 @@ ACaveboundEnemy::ACaveboundEnemy()
 		HitVolume->SetStaticMesh(CubeMesh.Object);
 	}
 
+	// The skeleton mesh. Turned -90 so it faces along the path.
 	Body = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Body"));
 	Body->SetupAttachment(VisualMesh);
 	Body->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
@@ -56,6 +60,7 @@ ACaveboundEnemy::ACaveboundEnemy()
 	Body->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	Body->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 
+	// Load the minion mesh, walk blueprint, death clip, hit clip, and punch clip.
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> MeshAsset(CaveboundMinionPaths::Mesh);
 	if (MeshAsset.Succeeded())
 	{
@@ -95,6 +100,8 @@ void ACaveboundEnemy::EnsureAnimationAssets()
 		return;
 	}
 
+	// If the constructor did not find an asset, try loading it again when the game starts.
+
 	if (!BodyMesh)
 	{
 		BodyMesh = LoadObject<USkeletalMesh>(nullptr, CaveboundMinionPaths::Mesh);
@@ -128,14 +135,16 @@ void ACaveboundEnemy::EnsureAnimationAssets()
 		MeleeMontage = LoadObject<UAnimMontage>(nullptr, CaveboundMinionPaths::Melee);
 	}
 
-	if (USkeleton* Skeleton = Body->GetSkeletalMeshAsset() ? Body->GetSkeletalMeshAsset()->GetSkeleton() : nullptr)
+	// The skeleton needs an UpperBody slot so hit and punch clips can play there.
+	if (USkeleton* skeleton = Body->GetSkeletalMeshAsset() ? Body->GetSkeletalMeshAsset()->GetSkeleton() : nullptr)
 	{
-		Skeleton->RegisterSlotNode(TEXT("UpperBody"));
+		skeleton->RegisterSlotNode(TEXT("UpperBody"));
 	}
 
-	if (UCaveboundMinionAnimInstance* Anim = GetMinionAnim())
+	// Keep the clip from moving the actor. The path spline already moves it.
+	if (UCaveboundMinionAnimInstance* minionAnim = GetMinionAnim())
 	{
-		Anim->SetRootMotionMode(ERootMotionMode::IgnoreRootMotion);
+		minionAnim->SetRootMotionMode(ERootMotionMode::IgnoreRootMotion);
 	}
 }
 
@@ -147,74 +156,82 @@ void ACaveboundEnemy::BeginPlay()
 
 void ACaveboundEnemy::Tick(float DeltaTime)
 {
-	const FVector LocationBeforeTick = GetActorLocation();
+	// Remember where we were so we can tell if the path move actually happened.
+	const FVector locationBeforeMoving = GetActorLocation();
 	Super::Tick(DeltaTime);
-	UpdatePresentation(DeltaTime, LocationBeforeTick);
+	UpdatePresentation(DeltaTime, locationBeforeMoving);
 }
 
 void ACaveboundEnemy::ApplyDamage(float Amount)
 {
-	const bool bWasAlive = !IsDead();
+	const bool wasAliveBeforeHit = !IsDead();
 	Super::ApplyDamage(Amount);
 
-	if (!bWasAlive || IsDead())
+	// A killing blow uses the death animation. A miss on an already dead minion does nothing.
+	if (!wasAliveBeforeHit || IsDead())
 	{
 		return;
 	}
 
+	// Flash red, stop the punch, and play the hit on the upper body.
 	FCaveboundDamageFlash::FlashComponent(this, Body, BodyFlashTimer, HitFlashColor, HitFlashDuration);
 
-	if (UAnimInstance* Anim = GetMinionAnim())
+	if (UAnimInstance* minionAnim = GetMinionAnim())
 	{
-		Anim->Montage_Stop(0.12f, MeleeMontage);
+		minionAnim->Montage_Stop(0.12f, MeleeMontage);
 	}
 
 	if (!PlayUpperBodyMontage(HitMontage))
 	{
-		bHitReacting = false;
+		bIsPlayingHitAnimation = false;
 	}
 }
 
 void ACaveboundEnemy::OnDeath()
 {
-	if (UWorld* World = GetWorld())
+	// Tell the game this enemy is gone, then stop attacks and play death on the whole body.
+	if (UWorld* world = GetWorld())
 	{
-		if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
+		if (ACaveboundGameMode* gameMode = world->GetAuthGameMode<ACaveboundGameMode>())
 		{
-			GameMode->RegisterEnemyDefeated();
+			gameMode->RegisterEnemyDefeated();
 		}
 	}
 
-	bHitReacting = false;
-	if (UCaveboundMinionAnimInstance* Anim = GetMinionAnim())
+	bIsPlayingHitAnimation = false;
+	if (UCaveboundMinionAnimInstance* minionAnim = GetMinionAnim())
 	{
-		Anim->Montage_Stop(0.1f);
-		Anim->SetDead(true);
+		minionAnim->Montage_Stop(0.1f);
+		minionAnim->SetDead(true);
 	}
 
-	const float DeathLength = DeathAnim ? DeathAnim->GetPlayLength() : 0.f;
-	if (DeathLength <= 0.f)
+	const float deathAnimLength = DeathAnim ? DeathAnim->GetPlayLength() : 0.f;
+	if (deathAnimLength <= 0.f)
 	{
 		Destroy();
 		return;
 	}
 
-	if (UWorld* World = GetWorld())
+	// Wait for the death clip to finish, then delete the actor.
+	if (UWorld* world = GetWorld())
 	{
-		World->GetTimerManager().SetTimer(
+		world->GetTimerManager().SetTimer(
 			DeathTimer,
-			FTimerDelegate::CreateWeakLambda(this, [this]()
-			{
-				Destroy();
-			}),
-			DeathLength,
+			this,
+			&ACaveboundEnemy::RemoveAfterDeathAnimation,
+			deathAnimLength,
 			false);
 	}
 }
 
+void ACaveboundEnemy::RemoveAfterDeathAnimation()
+{
+	Destroy();
+}
+
 bool ACaveboundEnemy::CanAttack() const
 {
-	return !bHitReacting && !IsDead();
+	return !bIsPlayingHitAnimation && !IsDead();
 }
 
 void ACaveboundEnemy::OnMeleeStrike()
@@ -224,23 +241,25 @@ void ACaveboundEnemy::OnMeleeStrike()
 
 bool ACaveboundEnemy::PlayUpperBodyMontage(UAnimMontage* Montage)
 {
-	UCaveboundMinionAnimInstance* Anim = GetMinionAnim();
-	if (!Anim || !Montage)
+	UCaveboundMinionAnimInstance* minionAnim = GetMinionAnim();
+	if (!minionAnim || !Montage)
 	{
 		return false;
 	}
 
-	if (Anim->Montage_Play(Montage, 1.f) <= 0.f)
+	// A play length of zero means the clip did not start.
+	if (minionAnim->Montage_Play(Montage, 1.f) <= 0.f)
 	{
 		return false;
 	}
 
+	// While the hit clip is playing, block the next punch. Clear that when the clip ends.
 	if (Montage == HitMontage)
 	{
-		FOnMontageEnded Ended;
-		Ended.BindUObject(this, &ACaveboundEnemy::HandleHitMontageEnded);
-		Anim->Montage_SetEndDelegate(Ended, HitMontage);
-		bHitReacting = true;
+		FOnMontageEnded whenHitEnds;
+		whenHitEnds.BindUObject(this, &ACaveboundEnemy::HandleHitMontageEnded);
+		minionAnim->Montage_SetEndDelegate(whenHitEnds, HitMontage);
+		bIsPlayingHitAnimation = true;
 	}
 
 	return true;
@@ -250,7 +269,7 @@ void ACaveboundEnemy::HandleHitMontageEnded(UAnimMontage* Montage, bool bInterru
 {
 	if (Montage == HitMontage)
 	{
-		bHitReacting = false;
+		bIsPlayingHitAnimation = false;
 	}
 }
 
@@ -261,22 +280,24 @@ UCaveboundMinionAnimInstance* ACaveboundEnemy::GetMinionAnim() const
 
 void ACaveboundEnemy::UpdatePresentation(float DeltaTime, const FVector& LocationBeforeTick)
 {
-	UCaveboundMinionAnimInstance* Anim = GetMinionAnim();
-	if (!Anim)
+	UCaveboundMinionAnimInstance* minionAnim = GetMinionAnim();
+	if (!minionAnim)
 	{
 		return;
 	}
 
+	// Dead minions stay on the death pose and do not blend back to a walk.
 	if (IsDead())
 	{
-		Anim->SetDead(true);
+		minionAnim->SetDead(true);
 		return;
 	}
 
-	Anim->SetDead(false);
+	minionAnim->SetDead(false);
 
-	const bool bMoved = !GetActorLocation().Equals(LocationBeforeTick, 1.f);
-	const float TargetSpeed = bMoved ? MoveSpeed * GetMoveSpeedScale() : 0.f;
-	SmoothedSpeed = FMath::FInterpTo(SmoothedSpeed, TargetSpeed, DeltaTime, LocomotionBlendSpeed);
-	Anim->SetLocomotionSpeed(SmoothedSpeed);
+	// If the actor moved along the path, ease the shown speed toward the real speed.
+	const bool enemyMoved = !GetActorLocation().Equals(LocationBeforeTick, 1.f);
+	const float speedWeWant = enemyMoved ? MoveSpeed * GetMoveSpeedScale() : 0.f;
+	smoothedMoveSpeed = FMath::FInterpTo(smoothedMoveSpeed, speedWeWant, DeltaTime, LocomotionBlendSpeed);
+	minionAnim->SetLocomotionSpeed(smoothedMoveSpeed);
 }

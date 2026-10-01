@@ -43,7 +43,7 @@ public:
 	bool IsDestroyed() const { return Health <= 0.f; }
 
 protected:
-	void PlayDamageFlash();
+	virtual void PlayDamageFlash();
 	virtual void OnDestroyedByDamage();
 
 	ACaveboundBaseEnemy* FindNearestEnemy() const;
@@ -66,15 +66,19 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	float Health = 150.f;
 
+	// False for traps that do not shoot arrows.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	bool bAutoFire = true;
 
+	// How far this defender looks for an enemy.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AttackRange = 1200.f;
 
+	// Seconds between shots.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float FireInterval = 1.0f;
 
+	// Where the shot comes out, measured from the turret.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (MakeEditWidget = true))
 	FVector FirePointOffset = FVector(80.f, 0.f, 100.f);
 
@@ -84,7 +88,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float ProjectileSpeed = 1200.f;
 
-	
+	// Which actor gets spawned as the shot.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	TSubclassOf<AActor> ProjectileClass;
 
@@ -96,5 +100,6 @@ protected:
 
 	FTimerHandle HitFlashTimer;
 
+	// How long we have waited since the last shot.
 	float FireTime = 0.f;
 };

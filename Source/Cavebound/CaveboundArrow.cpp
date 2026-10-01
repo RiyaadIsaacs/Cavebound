@@ -8,21 +8,22 @@ ACaveboundArrow::ACaveboundArrow()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
+	// A small cylinder. It only overlaps things. It does not bump the world.
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	SetRootComponent(VisualMesh);
 	VisualMesh->SetRelativeScale3D(FVector(0.15f, 0.15f, 0.6f));
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
-	// Enemies are WorldDynamic — Overlap+Overlap (see enemy tweak) generates BeginOverlap
+	// Enemies are also WorldDynamic, so both sides must overlap for the hit to count.
 	VisualMesh->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	VisualMesh->SetGenerateOverlapEvents(true);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> cylinderMesh(
 		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (CylinderMesh.Succeeded())
+	if (cylinderMesh.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(CylinderMesh.Object);
+		VisualMesh->SetStaticMesh(cylinderMesh.Object);
 	}
 }
 
@@ -30,14 +31,16 @@ void ACaveboundArrow::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Listen for the mesh touching an enemy.
 	if (VisualMesh)
 	{
 		VisualMesh->OnComponentBeginOverlap.AddDynamic(this, &ACaveboundArrow::OnMeshBeginOverlap);
 	}
 
-	if (AActor* ArrowOwner = GetOwner())
+	// Do not collide with the turret that fired this shot.
+	if (AActor* turretThatFired = GetOwner())
 	{
-		VisualMesh->MoveIgnoreActors.Add(ArrowOwner);
+		VisualMesh->MoveIgnoreActors.Add(turretThatFired);
 	}
 }
 
@@ -54,11 +57,13 @@ void ACaveboundArrow::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// One hit is enough. Stop moving after that.
 	if (bHasHit)
 	{
 		return;
 	}
 
+	// Delete the shot if it has been in the air too long.
 	Lifetime += DeltaTime;
 	if (Lifetime >= MaxLifetime)
 	{
@@ -66,23 +71,25 @@ void ACaveboundArrow::Tick(float DeltaTime)
 		return;
 	}
 
-	ACaveboundBaseEnemy* CurrentTarget = Target.Get();
-	if (!CurrentTarget || CurrentTarget->IsDead())
+	// Delete the shot if the enemy is already gone.
+	ACaveboundBaseEnemy* enemyToFollow = Target.Get();
+	if (!enemyToFollow || enemyToFollow->IsDead())
 	{
 		Destroy();
 		return;
 	}
 
-	const FVector ToTarget = CurrentTarget->GetActorLocation() - GetActorLocation();
-	if (ToTarget.Size() <= HitRadius)
+	const FVector directionToEnemy = enemyToFollow->GetActorLocation() - GetActorLocation();
+	if (directionToEnemy.Size() <= HitRadius)
 	{
-		TryHitEnemy(CurrentTarget);
+		TryHitEnemy(enemyToFollow);
 		return;
 	}
 
-	const FVector Step = ToTarget.GetSafeNormal() * Speed * DeltaTime;
-	AddActorWorldOffset(Step, true);
-	SetActorRotation(ToTarget.Rotation());
+	// Step toward the enemy and turn to face them.
+	const FVector stepTowardEnemy = directionToEnemy.GetSafeNormal() * Speed * DeltaTime;
+	AddActorWorldOffset(stepTowardEnemy, true);
+	SetActorRotation(directionToEnemy.Rotation());
 }
 
 void ACaveboundArrow::OnMeshBeginOverlap(
@@ -98,6 +105,7 @@ void ACaveboundArrow::OnMeshBeginOverlap(
 
 void ACaveboundArrow::TryHitEnemy(AActor* OtherActor)
 {
+	// Ignore a second hit, ourselves, and the turret that shot us.
 	if (bHasHit || !OtherActor || OtherActor == this || OtherActor == GetOwner())
 	{
 		return;
@@ -108,13 +116,13 @@ void ACaveboundArrow::TryHitEnemy(AActor* OtherActor)
 		return;
 	}
 
-	ACaveboundBaseEnemy* Enemy = Cast<ACaveboundBaseEnemy>(OtherActor);
-	if (!Enemy || Enemy->IsDead())
+	ACaveboundBaseEnemy* enemy = Cast<ACaveboundBaseEnemy>(OtherActor);
+	if (!enemy || enemy->IsDead())
 	{
 		return;
 	}
 
 	bHasHit = true;
-	Enemy->ApplyDamage(Damage);
+	enemy->ApplyDamage(Damage);
 	Destroy();
 }
