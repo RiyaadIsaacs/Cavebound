@@ -61,8 +61,9 @@ ACaveboundPoisonDome::ACaveboundPoisonDome()
 {
 	bAutoFire = false;
 
-	// Poison tower asset
-	VisualMesh->SetRelativeScale3D(FVector(0.2f));
+	// Poison tower in place of the old cone. The file is about 15 meters tall, so scale it down.
+	// Pivot is already on the ground, so it does not need a flip or a height offset.
+	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 

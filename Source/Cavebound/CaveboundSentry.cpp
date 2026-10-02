@@ -4,7 +4,7 @@
 
 ACaveboundSentry::ACaveboundSentry()
 {
-	VisualMesh->SetRelativeScale3D(FVector(0.2f));
+	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 

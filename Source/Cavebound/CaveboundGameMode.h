@@ -218,6 +218,21 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Round", meta = (ClampMin = "0"))
 	int32 WoodBonusEveryTwoRounds = 5;
 
+	// Hard cap on wood gained per mine tick (base + round bonus)
+	UPROPERTY(EditAnywhere, Category = "Round", meta = (ClampMin = "1"))
+	int32 MaxWoodPerHarvest = 20;
+
+	// After a cleared wave, restore up to this fraction of MaxHealth
+	UPROPERTY(EditAnywhere, Category = "Round", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float TreeHealthRecoverMaxPercent = 0.15f;
+
+	// If missing HP before recover is at least this fraction, ease DifficultyScore
+	UPROPERTY(EditAnywhere, Category = "Round", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float TreeHealthRecoverDifficultyThreshold = 0.10f;
+
+	UPROPERTY(EditAnywhere, Category = "Round")
+	int32 TreeHealthRecoverDifficultyPenalty = 6;
+
 	// Used as the base count before DifficultyScore / round bonuses
 	UPROPERTY(EditAnywhere, Category = "Round")
 	int32 MaxEnemiesPerRound = 8;

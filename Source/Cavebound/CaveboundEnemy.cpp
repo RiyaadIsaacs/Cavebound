@@ -26,37 +26,44 @@ ACaveboundEnemy::ACaveboundEnemy()
 	// Feet sit on the path, so we do not lift the actor extra.
 	PathHeightOffset = 0.f;
 
-	// The old cube mesh stays off. The skeleton is the body you see.
-	VisualMesh->SetVisibility(false);
-	VisualMesh->SetHiddenInGame(true);
+	// Keep VisualMesh visible in the hierarchy. SetVisibility(false) on the root would
+	// hide Body via IsVisible()'s parent walk, even with bPropagateToChildren=false.
+	// Clear any placeholder draw and leave hit detection to HitVolume.
+	VisualMesh->SetStaticMesh(nullptr);
+	VisualMesh->SetVisibility(true);
+	VisualMesh->SetHiddenInGame(false);
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	VisualMesh->SetCastShadow(false);
 
-	// A hidden box so arrows can still hit the minion.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
+
+	// Overlap volume so arrows (WorldDynamic) can hit the minion.
+	// Engine cube is 100cm; scale ~1.2 x 1.2 x 2.0 covers a standing character.
 	HitVolume = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HitVolume"));
 	HitVolume->SetupAttachment(VisualMesh);
 	HitVolume->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
-	HitVolume->SetRelativeScale3D(FVector(0.8f, 0.5f, 2.0f));
+	HitVolume->SetRelativeScale3D(FVector(1.2f, 1.2f, 2.0f));
 	HitVolume->SetVisibility(false);
 	HitVolume->SetHiddenInGame(true);
 	HitVolume->SetCastShadow(false);
 	HitVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	HitVolume->SetCollisionObjectType(ECC_WorldDynamic);
-	HitVolume->SetCollisionResponseToAllChannels(ECR_Overlap);
+	HitVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
+	HitVolume->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	HitVolume->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	HitVolume->SetGenerateOverlapEvents(true);
-
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeMesh.Succeeded())
 	{
 		HitVolume->SetStaticMesh(CubeMesh.Object);
 	}
 
-	// The skeleton mesh. Turned -90 so it faces along the path.
+	// Skeletal body stays on the visible VisualMesh root so it actually draws.
 	Body = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Body"));
 	Body->SetupAttachment(VisualMesh);
 	Body->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Body->SetVisibility(true);
+	Body->SetHiddenInGame(false);
 	Body->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	Body->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 
@@ -66,6 +73,16 @@ ACaveboundEnemy::ACaveboundEnemy()
 	{
 		BodyMesh = MeshAsset.Object;
 		Body->SetSkeletalMeshAsset(BodyMesh);
+	}
+	else if (CubeMesh.Succeeded())
+	{
+		// Fallback so a missing skeletal asset still shows something playable.
+		VisualMesh->SetStaticMesh(CubeMesh.Object);
+		VisualMesh->SetRelativeScale3D(FVector(0.8f, 0.5f, 2.0f));
+		VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
+		VisualMesh->SetVisibility(true);
+		VisualMesh->SetHiddenInGame(false);
+		VisualMesh->SetCastShadow(true);
 	}
 
 	static ConstructorHelpers::FClassFinder<UAnimInstance> AnimClass(CaveboundMinionPaths::AnimClass);
@@ -109,6 +126,15 @@ void ACaveboundEnemy::EnsureAnimationAssets()
 		return;
 	}
 
+	// Parent VisualMesh stays visible so Body is not culled by the parent IsVisible walk.
+	if (VisualMesh)
+	{
+		VisualMesh->SetVisibility(true);
+		VisualMesh->SetHiddenInGame(false);
+	}
+	Body->SetVisibility(true);
+	Body->SetHiddenInGame(false);
+
 	// If the constructor did not find an asset, try loading it again when the game starts.
 
 	if (!BodyMesh)
@@ -118,6 +144,43 @@ void ACaveboundEnemy::EnsureAnimationAssets()
 	if (BodyMesh)
 	{
 		Body->SetSkeletalMeshAsset(BodyMesh);
+		// Drop any fallback cube once the real mesh is available.
+		if (VisualMesh && VisualMesh->GetStaticMesh())
+		{
+			VisualMesh->SetStaticMesh(nullptr);
+			VisualMesh->SetRelativeScale3D(FVector::OneVector);
+			VisualMesh->SetRelativeLocation(FVector::ZeroVector);
+			VisualMesh->SetCastShadow(false);
+		}
+	}
+	else if (VisualMesh && !VisualMesh->GetStaticMesh())
+	{
+		if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+		{
+			VisualMesh->SetStaticMesh(Cube);
+			VisualMesh->SetRelativeScale3D(FVector(0.8f, 0.5f, 2.0f));
+			VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
+			VisualMesh->SetVisibility(true);
+			VisualMesh->SetHiddenInGame(false);
+			VisualMesh->SetCastShadow(true);
+		}
+	}
+
+	if (HitVolume)
+	{
+		HitVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		HitVolume->SetCollisionObjectType(ECC_WorldDynamic);
+		HitVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
+		HitVolume->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+		HitVolume->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+		HitVolume->SetGenerateOverlapEvents(true);
+		if (!HitVolume->GetStaticMesh())
+		{
+			if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+			{
+				HitVolume->SetStaticMesh(Cube);
+			}
+		}
 	}
 
 	if (!Body->GetAnimClass())

@@ -360,6 +360,29 @@ void ACaveboundGameMode::UpdateDifficultyAfterRound()
 		Delta -= 2;
 	}
 
+	// Tree recover (cap 15% MaxHealth). If the tree was missing >=10%, ease difficulty
+	if (Tree && !Tree->IsDestroyed())
+	{
+		const float Missing = FMath::Max(0.f, TreeMax - TreeHealthNow);
+		const float MissingRatio = Missing / TreeMax;
+		const float HealCap = TreeMax * FMath::Clamp(TreeHealthRecoverMaxPercent, 0.f, 1.f);
+		const float Healed = Tree->Heal(FMath::Min(Missing, HealCap));
+
+		if (MissingRatio >= TreeHealthRecoverDifficultyThreshold)
+		{
+			Delta -= FMath::Max(0, TreeHealthRecoverDifficultyPenalty);
+		}
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("Tree recover: missing=%.0f%% healed=%.0f (cap %.0f%%) difficultyDelta=%d"),
+			MissingRatio * 100.f,
+			Healed,
+			TreeHealthRecoverMaxPercent * 100.f,
+			Delta);
+	}
+
 	DifficultyScore = FMath::Clamp(DifficultyScore + Delta, MinDifficultyScore, MaxDifficultyScore);
 	++RoundIndex;
 }
@@ -752,7 +775,16 @@ void ACaveboundGameMode::SpawnEnemy()
 	FVector SpawnLoc = FVector::ZeroVector;
 	if (ChosenSpline)
 	{
-		SpawnLoc = ChosenSpline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
+		ChosenSpline->UpdateSpline();
+		const float SplineLength = ChosenSpline->GetSplineLength();
+		const FVector StartLoc =
+			ChosenSpline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
+		const FVector EndLoc =
+			ChosenSpline->GetLocationAtDistanceAlongSpline(SplineLength, ESplineCoordinateSpace::World);
+		const FVector Anchor = Tree ? Tree->GetActorLocation() : FVector::ZeroVector;
+		const bool bStartIsOuter =
+			FVector::DistSquared2D(StartLoc, Anchor) >= FVector::DistSquared2D(EndLoc, Anchor);
+		SpawnLoc = bStartIsOuter ? StartLoc : EndLoc;
 	}
 	else if (Tree)
 	{
@@ -799,8 +831,8 @@ void ACaveboundGameMode::SpawnEnemy()
 	}
 
 	// Cycle left / centre / right so packs share the path without stacking
-	const float LaneSlots[3] = { -0.75f, 0.f, 0.75f };
-	const float MaxLane = 200.f;
+	const float LaneSlots[3] = { -0.7f, 0.f, 0.7f };
+	const float MaxLane = Enemy->GetMaxLaneOffset();
 	const float PreferredLane = LaneSlots[EnemiesSpawnedThisRound % 3] * MaxLane;
 
 	Enemy->InitAlongPath(ChosenSpline, Tree, PreferredLane);
@@ -904,7 +936,8 @@ int32 ACaveboundGameMode::GetWoodPerHarvest() const
 {
 	const int32 Base = Tree ? Tree->GetWoodPerHarvest() : 5;
 	const int32 BonusSteps = FMath::Max(0, RoundIndex) / 2;
-	return Base + BonusSteps * WoodBonusEveryTwoRounds;
+	const int32 Uncapped = Base + BonusSteps * WoodBonusEveryTwoRounds;
+	return FMath::Clamp(Uncapped, 1, FMath::Max(1, MaxWoodPerHarvest));
 }
 
 bool ACaveboundGameMode::UseWood(int32 Amount)
@@ -920,7 +953,34 @@ bool ACaveboundGameMode::UseWood(int32 Amount)
 
 void ACaveboundGameMode::HandleTreeDestroyed()
 {
+	if (bGameOver)
+	{
+		return;
+	}
+
 	bGameOver = true;
 	RoundState = ECaveboundRoundState::GameOver;
 	ClearRoundTimers();
+
+	UE_LOG(LogTemp, Warning, TEXT("HandleTreeDestroyed: game over"));
+
+	// Stop any living enemies so the match clearly ends.
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	TArray<AActor*> FoundEnemies;
+	UGameplayStatics::GetAllActorsOfClass(World, ACaveboundBaseEnemy::StaticClass(), FoundEnemies);
+	for (AActor* Actor : FoundEnemies)
+	{
+		if (ACaveboundBaseEnemy* Enemy = Cast<ACaveboundBaseEnemy>(Actor))
+		{
+			if (!Enemy->IsDead())
+			{
+				Enemy->Destroy();
+			}
+		}
+	}
 }

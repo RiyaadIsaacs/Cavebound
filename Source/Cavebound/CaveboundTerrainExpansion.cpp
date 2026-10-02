@@ -217,31 +217,16 @@ namespace CaveboundTerrainExpansionPrivate
 				continue;
 			}
 
-			// Only push the outer (spawn) end — pushing the near-tree end drifts the path off the map.
-			const FVector StartLoc = Spline->GetLocationAtSplinePoint(0, ESplineCoordinateSpace::World);
-			const FVector EndLoc = Spline->GetLocationAtSplinePoint(NumPoints - 1, ESplineCoordinateSpace::World);
-			const int32 OuterIndex =
-				FVector::DistSquared2D(StartLoc, Origin) >= FVector::DistSquared2D(EndLoc, Origin)
-					? 0
-					: (NumPoints - 1);
-
-			FVector Loc = Spline->GetLocationAtSplinePoint(OuterIndex, ESplineCoordinateSpace::World);
-			FVector Dir = Loc - Origin;
-			Dir.Z = 0.f;
-			if (Dir.IsNearlyZero())
+			// Scale every control point with the mesh so the spline stays on the painted path.
+			// Pushing only the outer tip left mid-path points behind after expand.
+			for (int32 PointIndex = 0; PointIndex < NumPoints; ++PointIndex)
 			{
-				Dir = Spline->GetTangentAtSplinePoint(OuterIndex, ESplineCoordinateSpace::World);
-				Dir.Z = 0.f;
-				if (OuterIndex == 0)
-				{
-					Dir *= -1.f;
-				}
+				FVector Loc = Spline->GetLocationAtSplinePoint(PointIndex, ESplineCoordinateSpace::World);
+				const FVector Rel = Loc - Origin;
+				Loc = Origin + FVector(Rel.X * ScaleX, Rel.Y * ScaleY, Rel.Z);
+				Spline->SetLocationAtSplinePoint(PointIndex, Loc, ESplineCoordinateSpace::World, false);
 			}
-			if (Dir.Normalize())
-			{
-				Loc += Dir * OutGrowDistance;
-				Spline->SetLocationAtSplinePoint(OuterIndex, Loc, ESplineCoordinateSpace::World, true);
-			}
+			Spline->UpdateSpline();
 		}
 
 		UE_LOG(

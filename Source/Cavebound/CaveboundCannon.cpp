@@ -4,8 +4,8 @@
 
 ACaveboundCannon::ACaveboundCannon()
 {
-	// Cannon tower model
-	VisualMesh->SetRelativeScale3D(FVector(0.2f));
+	// Cannon tower model. Same scale as the archer tower so it fits a build slot.
+	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 

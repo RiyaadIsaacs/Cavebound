@@ -36,9 +36,10 @@ ACaveboundTurret::ACaveboundTurret()
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
 
+	// The archer tower is the normal turret body. Asset is huge — keep it slot-sized.
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	VisualMesh->SetupAttachment(SceneRoot);
-	VisualMesh->SetRelativeScale3D(FVector(0.2f));
+	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Block);
@@ -48,9 +49,12 @@ ACaveboundTurret::ACaveboundTurret()
 	{
 		VisualMesh->SetStaticMesh(towerMesh.Object);
 	}
+	VisualMesh->SetVisibility(true);
+	VisualMesh->SetHiddenInGame(false);
 
 	// Shoot from the top of the tower, toward its front.
-	FirePointOffset = FVector(40.f, 0.f, 220.f);
+	// Offset scales with mesh so AutoFire still leaves from near the top at 0.15.
+	FirePointOffset = FVector(40.f, 0.f, 180.f);
 
 	// Arrows are the normal shot unless a child changes this.
 	ProjectileClass = ACaveboundArrow::StaticClass();
@@ -64,6 +68,24 @@ void ACaveboundTurret::BeginPlay()
 
 	Health = MaxHealth;
 
+	// Re-apply scale / mesh in case a Blueprint child cleared them.
+	if (VisualMesh)
+	{
+		VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
+		VisualMesh->SetVisibility(true);
+		VisualMesh->SetHiddenInGame(false);
+		if (!VisualMesh->GetStaticMesh())
+		{
+			if (UStaticMesh* towerMesh = LoadObject<UStaticMesh>(
+					nullptr,
+					TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL1.SM_ArcherTower_LVL1")))
+			{
+				VisualMesh->SetStaticMesh(towerMesh);
+			}
+		}
+	}
+
+	// The fire-point arrow is added on the blueprint, so it exists once play starts.
 	RememberFirePoint();
 }
 

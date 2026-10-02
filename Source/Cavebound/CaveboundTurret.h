@@ -63,6 +63,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turret")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
 
+	// Fortress tower assets are huge; ~0.15 keeps them build-slot sized and readable in play.
+	UPROPERTY(EditAnywhere, Category = "Turret", meta = (ClampMin = "0.01", ClampMax = "1.0"))
+	float DefenderMeshScale = 0.3f;
+
 	// Wood spent to place this turret
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Turret")
 	int32 Cost = 150;

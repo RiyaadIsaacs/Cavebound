@@ -154,9 +154,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Boids")
 	float CohesionStrength = 0.f;
 
-	// Max lateral offset from the path centre (cm)
+	// Max lateral offset from the path centre (cm). Keep under half PathWidth (~100).
 	UPROPERTY(EditAnywhere, Category = "Boids")
-	float MaxLaneOffset = 200.f;
+	float MaxLaneOffset = 90.f;
 
 	// Preferred distance between enemies along the same path (cm)
 	UPROPERTY(EditAnywhere, Category = "Boids")
@@ -172,6 +172,8 @@ protected:
 
 	// How far along the spline we have walked (cm)
 	float DistanceAlongSpline = 0.f;
+	// +1 walks toward the spline end, -1 toward the start (always toward the tree)
+	float SplineTravelSign = 1.f;
 	// Stable side-of-path slot assigned at spawn (-Max..+Max)
 	float PreferredLaneOffset = 0.f;
 	// Time since last attack pulse

@@ -14,6 +14,9 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	SetRootComponent(VisualMesh);
+	// Keep the root visible so child skeletal bodies are not culled by IsVisible().
+	VisualMesh->SetVisibility(true);
+	VisualMesh->SetHiddenInGame(false);
 	// Query-only: path movement teleports along the spline, so physics blocking
 	// between enemies fights the boid offsets and makes packs look stuck.
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
@@ -31,14 +34,36 @@ void ACaveboundBaseEnemy::InitAlongPath(USplineComponent* Spline, ACaveboundTree
 	PathSpline = Spline;
 	Tree = InTree;
 	DistanceAlongSpline = 0.f;
+	SplineTravelSign = 1.f;
 	AttackTime = 0.f;
 	PreferredLaneOffset = FMath::Clamp(InPreferredLaneOffset, -MaxLaneOffset, MaxLaneOffset);
 
 	if (Spline)
 	{
-		const FVector PathPoint = Spline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
-		FVector Tangent = Spline->GetTangentAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
+		Spline->UpdateSpline();
+		const float SplineLength = Spline->GetSplineLength();
+
+		// Always start at the outer rim (farther from the tree) and walk inward.
+		const FVector StartLoc = Spline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
+		const FVector EndLoc = Spline->GetLocationAtDistanceAlongSpline(SplineLength, ESplineCoordinateSpace::World);
+		const FVector Anchor = InTree ? InTree->GetActorLocation() : FVector::ZeroVector;
+		const bool bStartIsOuter =
+			FVector::DistSquared2D(StartLoc, Anchor) >= FVector::DistSquared2D(EndLoc, Anchor);
+
+		DistanceAlongSpline = bStartIsOuter ? 0.f : SplineLength;
+		SplineTravelSign = bStartIsOuter ? 1.f : -1.f;
+
+		const FVector PathPoint = Spline->GetLocationAtDistanceAlongSpline(
+			DistanceAlongSpline,
+			ESplineCoordinateSpace::World);
+		FVector Tangent = Spline->GetTangentAtDistanceAlongSpline(
+			DistanceAlongSpline,
+			ESplineCoordinateSpace::World);
 		Tangent.Z = 0.f;
+		if (SplineTravelSign < 0.f)
+		{
+			Tangent *= -1.f;
+		}
 
 		FVector PathRight = FVector::CrossProduct(FVector::UpVector, Tangent.GetSafeNormal());
 		if (!PathRight.Normalize())
@@ -323,7 +348,8 @@ float ACaveboundBaseEnemy::ComputeForwardStagger() const
 		}
 
 		// Someone ahead / overlapping us on the spline — ease off harder the closer they are
-		if (DistDelta >= -KINDA_SMALL_NUMBER)
+		const float AheadDelta = DistDelta * SplineTravelSign;
+		if (AheadDelta >= -KINDA_SMALL_NUMBER)
 		{
 			const float Closeness = 1.f - (FMath::Abs(DistDelta) / ForwardStaggerDistance);
 			const float SlowAmount = ForwardStaggerStrength * Closeness;
@@ -413,8 +439,11 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 
 	const float SplineLength = Spline->GetSplineLength();
 	const float SpeedScale = GetMoveSpeedScale() * ComputeForwardStagger();
+	const bool bReachedInnerEnd =
+		(SplineTravelSign >= 0.f && DistanceAlongSpline >= SplineLength - KINDA_SMALL_NUMBER)
+		|| (SplineTravelSign < 0.f && DistanceAlongSpline <= KINDA_SMALL_NUMBER);
 
-	if (DistanceAlongSpline >= SplineLength)
+	if (bReachedInnerEnd)
 	{
 		// Path ended before the trunk
 		if (Tree.IsValid())
@@ -449,8 +478,11 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 	// Back beside the path. Keep going from here.
 	DistanceAlongSpline = FMath::Clamp(ClosestDistance, 0.f, SplineLength);
 
-	// Move along the spline and don't overshoot the end
-	DistanceAlongSpline = FMath::Min(DistanceAlongSpline + MoveSpeed * SpeedScale * DeltaTime, SplineLength);
+	// Move toward the tree end — don't overshoot.
+	DistanceAlongSpline = FMath::Clamp(
+		DistanceAlongSpline + MoveSpeed * SpeedScale * DeltaTime * SplineTravelSign,
+		0.f,
+		SplineLength);
 
 	const FVector PathPoint = Spline->GetLocationAtDistanceAlongSpline(
 		DistanceAlongSpline,
@@ -460,6 +492,10 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 		DistanceAlongSpline,
 		ESplineCoordinateSpace::World);
 	Tangent.Z = 0.f;
+	if (SplineTravelSign < 0.f)
+	{
+		Tangent *= -1.f;
+	}
 
 	FVector PathRight = FVector::CrossProduct(FVector::UpVector, Tangent.GetSafeNormal());
 	if (PathRight.IsNearlyZero())

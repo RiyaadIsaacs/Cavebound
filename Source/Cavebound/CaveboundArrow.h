@@ -55,8 +55,9 @@ protected:
 	float MaxLifetime = 4.f;
 
 	// Close enough to count as a hit even before the overlap fires.
+	// Sized for enemy root (feet) while shots aim near chest height.
 	UPROPERTY(EditAnywhere, Category = "Combat")
-	float HitRadius = 50.f;
+	float HitRadius = 140.f;
 
 	// The enemy this shot is chasing.
 	TWeakObjectPtr<ACaveboundBaseEnemy> Target;

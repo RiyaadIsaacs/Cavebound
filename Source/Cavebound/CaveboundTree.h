@@ -42,9 +42,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	void ApplyDamage(float Amount);
 
+	// Restore HP after a cleared round. Returns amount actually healed
+	UFUNCTION(BlueprintCallable, Category = "Cavebound")
+	float Heal(float Amount);
+
 	bool IsDestroyed() const { return Health <= 0.f; }
 
 protected:
+	void NotifyDestroyedByDamage();
 	void PlayDamageFlash();
 	void TryFireAtNearestEnemy();
 

@@ -49,7 +49,7 @@ ACaveboundTree::ACaveboundTree()
 
 void ACaveboundTree::ApplyDamage(float Amount)
 {
-	if (IsDestroyed())
+	if (Amount <= 0.f || Health <= 0.f)
 	{
 		return;
 	}
@@ -57,16 +57,46 @@ void ACaveboundTree::ApplyDamage(float Amount)
 	Health = FMath::Max(0.f, Health - Amount);
 	PlayDamageFlash();
 
-	if (IsDestroyed())
+	if (Health <= 0.f)
 	{
-		if (UWorld* World = GetWorld())
+		NotifyDestroyedByDamage();
+	}
+}
+
+void ACaveboundTree::NotifyDestroyedByDamage()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
+	{
+		GameMode->HandleTreeDestroyed();
+		return;
+	}
+
+	// Fallback if the world auth game mode cast fails for any reason.
+	if (AGameModeBase* BaseMode = World->GetAuthGameMode())
+	{
+		if (ACaveboundGameMode* GameMode = Cast<ACaveboundGameMode>(BaseMode))
 		{
-			if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
-			{
-				GameMode->HandleTreeDestroyed();
-			}
+			GameMode->HandleTreeDestroyed();
 		}
 	}
+}
+
+float ACaveboundTree::Heal(float Amount)
+{
+	if (IsDestroyed() || Amount <= 0.f || MaxHealth <= KINDA_SMALL_NUMBER)
+	{
+		return 0.f;
+	}
+
+	const float Before = Health;
+	Health = FMath::Min(MaxHealth, Health + Amount);
+	return Health - Before;
 }
 
 void ACaveboundTree::PlayDamageFlash()

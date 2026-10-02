@@ -79,16 +79,19 @@ void ACaveboundArrow::Tick(float DeltaTime)
 		return;
 	}
 
-	const FVector directionToEnemy = enemyToFollow->GetActorLocation() - GetActorLocation();
-	if (directionToEnemy.Size() <= HitRadius)
+	// Aim at torso height; distance check vs actor root still uses HitRadius for reliability.
+	const FVector enemyAimPoint = enemyToFollow->GetActorLocation() + FVector(0.f, 0.f, 80.f);
+	const FVector directionToEnemy = enemyAimPoint - GetActorLocation();
+	if (directionToEnemy.Size() <= HitRadius
+		|| FVector::Dist(GetActorLocation(), enemyToFollow->GetActorLocation()) <= HitRadius)
 	{
 		TryHitEnemy(enemyToFollow);
 		return;
 	}
 
-	// Step toward the enemy. The mesh's long axis points up, so aim that up-axis along the shot.
+	// Homing step without sweep so world geometry cannot stop the shot short of HitRadius.
 	const FVector stepTowardEnemy = directionToEnemy.GetSafeNormal() * Speed * DeltaTime;
-	AddActorWorldOffset(stepTowardEnemy, true);
+	AddActorWorldOffset(stepTowardEnemy, false);
 	SetActorRotation(FRotationMatrix::MakeFromZ(directionToEnemy.GetSafeNormal()).Rotator());
 }
 
