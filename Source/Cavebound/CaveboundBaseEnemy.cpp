@@ -1,5 +1,6 @@
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundSnare.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
 #include "Components/SplineComponent.h"
@@ -96,6 +97,20 @@ void ACaveboundBaseEnemy::ApplyDamage(float Amount)
 
 	if (IsDead())
 	{
+		// Tell the snare to drop the rope, and remember this spot so a pad cannot appear on the corpse.
+		if (ACaveboundSnare* snare = Cast<ACaveboundSnare>(SnareSource.Get()))
+		{
+			snare->DropCatch();
+		}
+
+		if (UWorld* world = GetWorld())
+		{
+			if (ACaveboundGameMode* gameMode = world->GetAuthGameMode<ACaveboundGameMode>())
+			{
+				gameMode->NoteEnemyDiedHere(GetActorLocation());
+			}
+		}
+
 		OnDeath();
 	}
 }

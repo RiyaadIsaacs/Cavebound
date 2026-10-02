@@ -36,7 +36,6 @@ ACaveboundTurret::ACaveboundTurret()
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
 
-	// The archer tower is the normal turret body. Asset is huge — keep it slot-sized.
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	VisualMesh->SetupAttachment(SceneRoot);
 	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
@@ -52,11 +51,8 @@ ACaveboundTurret::ACaveboundTurret()
 	VisualMesh->SetVisibility(true);
 	VisualMesh->SetHiddenInGame(false);
 
-	// Shoot from the top of the tower, toward its front.
-	// Offset scales with mesh so AutoFire still leaves from near the top at 0.15.
 	FirePointOffset = FVector(40.f, 0.f, 180.f);
 
-	// Arrows are the normal shot unless a child changes this.
 	ProjectileClass = ACaveboundArrow::StaticClass();
 
 	Health = MaxHealth;
@@ -68,7 +64,6 @@ void ACaveboundTurret::BeginPlay()
 
 	Health = MaxHealth;
 
-	// Re-apply scale / mesh in case a Blueprint child cleared them.
 	if (VisualMesh)
 	{
 		VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
@@ -85,7 +80,6 @@ void ACaveboundTurret::BeginPlay()
 		}
 	}
 
-	// The fire-point arrow is added on the blueprint, so it exists once play starts.
 	RememberFirePoint();
 }
 
@@ -98,7 +92,6 @@ void ACaveboundTurret::Tick(float DeltaTime)
 		return;
 	}
 
-	// Only shoot while a combat round is running.
 	if (UWorld* world = GetWorld())
 	{
 		if (const ACaveboundGameMode* gameMode = world->GetAuthGameMode<ACaveboundGameMode>())

@@ -3,7 +3,6 @@
 
 ACaveboundBallistaShell::ACaveboundBallistaShell()
 {
-	// The bolt points up in the file. The arrow tick aims that axis along the shot.
 	VisualMesh->SetRelativeScale3D(FVector(0.4f));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 

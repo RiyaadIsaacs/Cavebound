@@ -40,7 +40,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	int32 GetCost() const { return Cost; }
 
-	// Cost from the C++ class, even when a blueprint has saved an older number.
 	static int32 GetCostForClass(TSubclassOf<AActor> DefenderClass);
 
 	bool IsDestroyed() const { return Health <= 0.f; }
@@ -59,17 +58,15 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turret")
 	TObjectPtr<USceneComponent> SceneRoot;
 
-	// Placeholder mesh 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turret")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
 
-	// Fortress tower assets are huge; ~0.15 keeps them build-slot sized and readable in play.
 	UPROPERTY(EditAnywhere, Category = "Turret", meta = (ClampMin = "0.01", ClampMax = "1.0"))
 	float DefenderMeshScale = 0.3f;
 
 	// Wood spent to place this turret
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Turret")
-	int32 Cost = 150;
+	int32 Cost = 40;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float MaxHealth = 150.f;

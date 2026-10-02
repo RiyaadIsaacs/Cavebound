@@ -100,6 +100,9 @@ public:
 
 	void RegisterEnemyDefeated();
 
+	// Watch this spot so a build pad that appears on the corpse can be removed.
+	void NoteEnemyDiedHere(const FVector& Spot);
+
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	int32 GetEnemiesSpawnedThisRound() const { return EnemiesSpawnedThisRound; }
 
@@ -135,6 +138,7 @@ protected:
 	void RequestEndRound();
 	void ExpandBuildSlotsNextTick();
 	void ClearRoundTimers();
+	void SweepSlotsSpawnedOnDeaths();
 
 	void PrepareWaveBudget();
 	void UpdateDifficultyAfterRound();
@@ -266,4 +270,13 @@ protected:
 	FTimerHandle EnemySpawnTimer;
 	FTimerHandle EndRoundTimer;
 	FTimerHandle ExpandSlotsTimer;
+	FTimerHandle SlotSweepTimer;
+
+	struct FDeathSpot
+	{
+		FVector Location;
+		float ExpireTime;
+	};
+
+	TArray<FDeathSpot> RecentDeathSpots;
 };

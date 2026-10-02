@@ -24,6 +24,8 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	void DropCatch();
+
 protected:
 	// Range
 	UPROPERTY(EditAnywhere, Category = "Snare")

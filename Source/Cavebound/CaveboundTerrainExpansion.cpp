@@ -354,7 +354,7 @@ namespace CaveboundTerrainExpansionPrivate
 		const float Step = FMath::Max(150.f, Spacing);
 		int32 Spawned = 0;
 
-		// Walk from the far end of each path first so new pads sit on the expanded rim.
+		// Walk in from the path start. The far end is the tree, where enemies die.
 		for (USplineComponent* Spline : Paths)
 		{
 			if (Spawned >= MaxNewSlots)
@@ -363,7 +363,8 @@ namespace CaveboundTerrainExpansionPrivate
 			}
 
 			const float Length = Spline->GetSplineLength();
-			for (float Dist = Length - Step * 0.5f; Dist > Step * 0.25f && Spawned < MaxNewSlots; Dist -= Step)
+			const float StopBeforeTree = FMath::Max(Step, Length - Step * 2.f);
+			for (float Dist = Step; Dist < StopBeforeTree && Spawned < MaxNewSlots; Dist += Step)
 			{
 				const FVector Centre = Spline->GetLocationAtDistanceAlongSpline(Dist, ESplineCoordinateSpace::World);
 				FVector Tangent = Spline->GetTangentAtDistanceAlongSpline(Dist, ESplineCoordinateSpace::World);

@@ -7,10 +7,7 @@
 class UStaticMeshComponent;
 class ACaveboundBaseEnemy;
 
-/**
- * Turret projectile. Homes toward an enemy (same idea as the tree cube) and applies damage on hit.
- * Reparent BP_Arrow to this if you want the ballista mesh with reliable damage.
- */
+//Projectile
 UCLASS(Blueprintable)
 class CAVEBOUND_API ACaveboundArrow : public AActor
 {
@@ -54,17 +51,15 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float MaxLifetime = 4.f;
 
-	// Close enough to count as a hit even before the overlap fires.
-	// Sized for enemy root (feet) while shots aim near chest height.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float HitRadius = 140.f;
 
-	// The enemy this shot is chasing.
+	// Target enemy
 	TWeakObjectPtr<ACaveboundBaseEnemy> Target;
 
-	// How long this shot has been in the air.
+	// Air duration
 	float Lifetime = 0.f;
 
-	// Stops the shot from damaging more than one enemy.
+	// Prevents damaging multiple enemies
 	bool bHasHit = false;
 };

@@ -44,15 +44,21 @@ ACaveboundSnare::ACaveboundSnare()
 
 void ACaveboundSnare::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Allows enemy to act
+	// Lets the enemy move again and removes the rope.
+	DropCatch();
+
+	Super::EndPlay(EndPlayReason);
+}
+
+void ACaveboundSnare::DropCatch()
+{
 	if (ACaveboundBaseEnemy* heldEnemy = TrappedEnemy.Get())
 	{
 		heldEnemy->ReleaseSnare(this);
 	}
+
 	TrappedEnemy = nullptr;
 	ClearRope();
-
-	Super::EndPlay(EndPlayReason);
 }
 
 void ACaveboundSnare::Tick(float DeltaTime)
@@ -62,6 +68,18 @@ void ACaveboundSnare::Tick(float DeltaTime)
 	if (IsDestroyed())
 	{
 		return;
+	}
+
+	if (ACaveboundBaseEnemy* heldEnemy = TrappedEnemy.Get())
+	{
+		if (heldEnemy->IsDead())
+		{
+			DropCatch();
+		}
+	}
+	else if (RopePieces.Num() > 0)
+	{
+		ClearRope();
 	}
 
 	if (!IsCombatRound())
@@ -80,14 +98,12 @@ bool ACaveboundSnare::IsCombatRound() const
 		return false;
 	}
 
-	// If there is no game mode, still allow the trap. Otherwise only catch during combat.
 	const ACaveboundGameMode* gameMode = world->GetAuthGameMode<ACaveboundGameMode>();
 	return !gameMode || gameMode->GetRoundState() == ECaveboundRoundState::Combat;
 }
 
 void ACaveboundSnare::UpdateSnare()
 {
-	// Keep the current catch if that enemy is still held and still alive.
 	if (ACaveboundBaseEnemy* heldEnemy = TrappedEnemy.Get())
 	{
 		if (heldEnemy->IsSnaredBy(this) && !heldEnemy->IsDead())
@@ -103,7 +119,6 @@ void ACaveboundSnare::UpdateSnare()
 		ClearRope();
 	}
 
-	// Snares enemy that hasnt been snared
 	if (ACaveboundBaseEnemy* closestEnemy = FindSnareTarget())
 	{
 		if (closestEnemy->TrySnare(this, TrapDuration))

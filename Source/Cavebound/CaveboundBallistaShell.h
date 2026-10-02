@@ -4,9 +4,7 @@
 #include "CaveboundArrow.h"
 #include "CaveboundBallistaShell.generated.h"
 
-/**
- * Sentry projectile. Same homing shot as an arrow, with the ballista bolt mesh.
- */
+// Sentry projectile
 UCLASS()
 class CAVEBOUND_API ACaveboundBallistaShell : public ACaveboundArrow
 {

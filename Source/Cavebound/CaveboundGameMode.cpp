@@ -11,6 +11,7 @@
 #include "Components/SplineComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "UObject/UnrealType.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 
@@ -853,6 +854,84 @@ void ACaveboundGameMode::SpawnEnemy()
 	if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound)
 	{
 		World->GetTimerManager().ClearTimer(EnemySpawnTimer);
+	}
+}
+
+void ACaveboundGameMode::NoteEnemyDiedHere(const FVector& Spot)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Keep the spot for a short time. The pad can appear a moment after the kill.
+	FDeathSpot Death;
+	Death.Location = Spot;
+	Death.ExpireTime = World->GetTimeSeconds() + 2.f;
+	RecentDeathSpots.Add(Death);
+
+	if (!World->GetTimerManager().IsTimerActive(SlotSweepTimer))
+	{
+		World->GetTimerManager().SetTimer(
+			SlotSweepTimer,
+			this,
+			&ACaveboundGameMode::SweepSlotsSpawnedOnDeaths,
+			0.05f,
+			true);
+	}
+}
+
+void ACaveboundGameMode::SweepSlotsSpawnedOnDeaths()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const float Now = World->GetTimeSeconds();
+	RecentDeathSpots.RemoveAll([Now](const FDeathSpot& Spot)
+	{
+		return Spot.ExpireTime <= Now;
+	});
+
+	if (RecentDeathSpots.Num() == 0)
+	{
+		World->GetTimerManager().ClearTimer(SlotSweepTimer);
+		return;
+	}
+
+	UClass* SlotClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_BuildSlot.BP_BuildSlot_C"));
+	if (!SlotClass)
+	{
+		return;
+	}
+
+	TArray<AActor*> Slots;
+	UGameplayStatics::GetAllActorsOfClass(World, SlotClass, Slots);
+	for (AActor* Slot : Slots)
+	{
+		// Leave pads that were already on the map. Only remove one that just appeared.
+		if (!Slot || Slot->GetGameTimeSinceCreation() > 1.5f)
+		{
+			continue;
+		}
+
+		const FBoolProperty* Occupied = FindFProperty<FBoolProperty>(Slot->GetClass(), TEXT("IsOccupied"));
+		if (Occupied && Occupied->GetPropertyValue_InContainer(Slot))
+		{
+			continue;
+		}
+
+		for (const FDeathSpot& Death : RecentDeathSpots)
+		{
+			if (FVector::Dist2D(Slot->GetActorLocation(), Death.Location) <= 250.f)
+			{
+				Slot->Destroy();
+				break;
+			}
+		}
 	}
 }
 
