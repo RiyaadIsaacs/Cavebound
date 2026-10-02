@@ -178,7 +178,8 @@ namespace CaveboundTerrainExpansionPrivate
 
 		float CellSize = 100.f;
 		ReadFloatProperty(Terrain, TEXT("CellSize"), CellSize);
-		OutGrowDistance = ExtraCellsPerSide * CellSize;
+		// Mesh grows from the centre, so each rim only moves out by half the added width.
+		OutGrowDistance = ExtraCellsPerSide * CellSize * 0.5f;
 
 		const float HalfWidth = NewX * CellSize * 0.5f;
 		const float HalfHeight = NewY * CellSize * 0.5f;
@@ -216,32 +217,31 @@ namespace CaveboundTerrainExpansionPrivate
 				continue;
 			}
 
-			auto PushPointOutward = [&](int32 PointIndex)
+			// Only push the outer (spawn) end — pushing the near-tree end drifts the path off the map.
+			const FVector StartLoc = Spline->GetLocationAtSplinePoint(0, ESplineCoordinateSpace::World);
+			const FVector EndLoc = Spline->GetLocationAtSplinePoint(NumPoints - 1, ESplineCoordinateSpace::World);
+			const int32 OuterIndex =
+				FVector::DistSquared2D(StartLoc, Origin) >= FVector::DistSquared2D(EndLoc, Origin)
+					? 0
+					: (NumPoints - 1);
+
+			FVector Loc = Spline->GetLocationAtSplinePoint(OuterIndex, ESplineCoordinateSpace::World);
+			FVector Dir = Loc - Origin;
+			Dir.Z = 0.f;
+			if (Dir.IsNearlyZero())
 			{
-				FVector Loc = Spline->GetLocationAtSplinePoint(PointIndex, ESplineCoordinateSpace::World);
-				FVector Dir = Loc - Origin;
+				Dir = Spline->GetTangentAtSplinePoint(OuterIndex, ESplineCoordinateSpace::World);
 				Dir.Z = 0.f;
-				if (Dir.IsNearlyZero())
+				if (OuterIndex == 0)
 				{
-					Dir = Spline->GetTangentAtSplinePoint(PointIndex, ESplineCoordinateSpace::World);
-					Dir.Z = 0.f;
-					if (PointIndex == 0)
-					{
-						Dir *= -1.f;
-					}
+					Dir *= -1.f;
 				}
-				if (!Dir.Normalize())
-				{
-					return;
-				}
-
+			}
+			if (Dir.Normalize())
+			{
 				Loc += Dir * OutGrowDistance;
-				Spline->SetLocationAtSplinePoint(PointIndex, Loc, ESplineCoordinateSpace::World, false);
-			};
-
-			PushPointOutward(0);
-			PushPointOutward(NumPoints - 1);
-			Spline->UpdateSpline();
+				Spline->SetLocationAtSplinePoint(OuterIndex, Loc, ESplineCoordinateSpace::World, true);
+			}
 		}
 
 		UE_LOG(

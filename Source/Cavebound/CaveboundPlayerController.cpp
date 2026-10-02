@@ -241,6 +241,26 @@ void ACaveboundPlayerController::SetupInputComponent()
 		TabBinding.bExecuteWhenPaused = true;
 
 		InputComponent->BindKey(EKeys::B, IE_Pressed, this, &ACaveboundPlayerController::HandleBuildKey);
+		InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACaveboundPlayerController::RequestStartRound);
+	}
+}
+
+void ACaveboundPlayerController::RequestStartRound()
+{
+	if (bPauseMenuOpen)
+	{
+		return;
+	}
+
+	ACaveboundGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACaveboundGameMode>() : nullptr;
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("RequestStartRound: GameMode=%s"),
+		GameMode ? *GameMode->GetName() : TEXT("null"));
+	if (GameMode)
+	{
+		GameMode->StartRound();
 	}
 }
 

@@ -82,9 +82,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	bool IsRoundCollecting() const { return RoundState == ECaveboundRoundState::Collecting; }
 
-	// Seconds left in the collection phase. Returns 0 unless Collecting
+	// Seconds left in the collection phase. Returns 0 unless Collecting.
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetCollectionTimeRemaining() const;
+
+	float GetCollectionDuration() const { return CollectionDuration; }
 
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	bool CanCollectWood() const;
@@ -117,7 +119,9 @@ public:
 protected:
 	// Spawn the magical wood tree if the level does not already have one
 	void EnsureTree();
-	// Find Path1/Path2/Path3 
+	// Guarantee concrete EnemyClass
+	void EnsureEnemySpawnConfig();
+	// Find Path1/Path2/Path3 (falls back to any valid world spline)
 	void CollectPathSplines();
 	// Spawn one enemy on the next path, cycling 1 - 2 - 3
 	void SpawnEnemy();
@@ -133,11 +137,11 @@ protected:
 	TSubclassOf<ACaveboundBaseEnemy> PickEnemyClassForSpawn() const;
 	float GetCurrentSpawnInterval() const;
 
-	// Cells added to GridSizeX/Y each cleared wave (grows the visible map).
+	// Cells added to GridSizeX/Y each cleared wave.
 	UPROPERTY(EditAnywhere, Category = "BuildSlots")
 	int32 BuildSlotExpandCells = 2;
 
-	// Multiplies MinSlotSpacing each expansion (0.85 => pads may sit closer)
+	// Multiplies MinSlotSpacing each expansion 
 	UPROPERTY(EditAnywhere, Category = "BuildSlots")
 	float BuildSlotSpacingMultiplier = 0.85f;
 
@@ -199,8 +203,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Enemies")
 	float MaxSpawnInterval = 3.5f;
 
-	UPROPERTY(EditAnywhere, Category = "Round")
-	float CollectionDuration = 60.0f;
+	// Seconds of gather time after Start Round before combat (0 = immediate).
+	// HUD "Next Wave" countdown uses GetCollectionTimeRemaining() from this timer.
+	UPROPERTY(EditAnywhere, Category = "Round", meta = (ClampMin = "0.0"))
+	float CollectionDuration = 30.f;
 
 	// Used as the base count before DifficultyScore / round bonuses
 	UPROPERTY(EditAnywhere, Category = "Round")

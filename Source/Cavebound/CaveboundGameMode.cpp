@@ -45,15 +45,68 @@ void ACaveboundGameMode::StartPlay()
 	Super::StartPlay();
 	EnsureGameplayReady();
 	RoundState = ECaveboundRoundState::Idle;
+	bGameOver = false;
+	bEndRoundPending = false;
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("StartPlay: CollectionDuration=%.1fs paths=%d pool=%d"),
+		CollectionDuration,
+		PathSplines.Num(),
+		EnemySpawnPool.Num());
 }
 
 void ACaveboundGameMode::EnsureGameplayReady()
 {
 	EnsureTree();
-	if (PathSplines.Num() == 0)
+	EnsureEnemySpawnConfig();
+	CollectPathSplines();
+}
+
+void ACaveboundGameMode::EnsureEnemySpawnConfig()
+{
+	auto IsSpawnableEnemyClass = [](const TSubclassOf<ACaveboundBaseEnemy>& Class) -> bool
 	{
-		CollectPathSplines();
+		return Class && !Class->HasAnyClassFlags(CLASS_Abstract);
+	};
+
+	if (!IsSpawnableEnemyClass(EnemyClass))
+	{
+		EnemyClass = ACaveboundEnemy::StaticClass();
 	}
+
+	// Drop null / abstract entries (Abstract base must never be spawned).
+	for (int32 Index = EnemySpawnPool.Num() - 1; Index >= 0; --Index)
+	{
+		if (!IsSpawnableEnemyClass(EnemySpawnPool[Index].EnemyClass))
+		{
+			EnemySpawnPool.RemoveAt(Index);
+		}
+	}
+
+	// BP_CaveboundGameMode can serialize an empty pool and wipe constructor defaults.
+	if (EnemySpawnPool.Num() == 0)
+	{
+		FCaveboundEnemySpawnEntry Basic;
+		Basic.EnemyClass = ACaveboundEnemy::StaticClass();
+		EnemySpawnPool.Add(Basic);
+
+		FCaveboundEnemySpawnEntry Brute;
+		Brute.EnemyClass = ACaveboundBruteEnemy::StaticClass();
+		EnemySpawnPool.Add(Brute);
+
+		FCaveboundEnemySpawnEntry LongRange;
+		LongRange.EnemyClass = ACaveboundLongRangeEnemy::StaticClass();
+		EnemySpawnPool.Add(LongRange);
+	}
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("EnsureEnemySpawnConfig: EnemyClass=%s pool=%d"),
+		EnemyClass ? *EnemyClass->GetName() : TEXT("null"),
+		EnemySpawnPool.Num());
 }
 
 ACaveboundTree* ACaveboundGameMode::GetTree() const
@@ -122,7 +175,6 @@ void ACaveboundGameMode::EnsureTree()
 
 void ACaveboundGameMode::CollectPathSplines()
 {
-	// Look up Path* splines by name
 	PathSplines.Reset();
 
 	UWorld* World = GetWorld();
@@ -131,32 +183,87 @@ void ACaveboundGameMode::CollectPathSplines()
 		return;
 	}
 
-	// Find all actors in the world and look for USplineComponent named Path1, Path2, Path3
-	TArray<AActor*> Actors;
-	UGameplayStatics::GetAllActorsOfClass(World, AActor::StaticClass(), Actors);
-	for (AActor* Actor : Actors)
+	TArray<USplineComponent*> NamedPaths;
+	TArray<USplineComponent*> AnyValid;
+
+	auto ConsiderSpline = [&NamedPaths, &AnyValid](USplineComponent* Spline)
+	{
+		if (!Spline || !IsValid(Spline) || Spline->GetNumberOfSplinePoints() < 2)
+		{
+			return;
+		}
+
+		// Procedural paths may need a refresh before length / points are trustworthy.
+		Spline->UpdateSpline();
+		AnyValid.Add(Spline);
+
+		// Prefer BP_ProceduralTerrain Path1 / Path2 / Path3, but do not require the name.
+		if (Spline->GetName().Contains(TEXT("Path")))
+		{
+			NamedPaths.Add(Spline);
+		}
+	};
+
+	auto CollectFromActor = [&ConsiderSpline](AActor* Actor)
 	{
 		if (!Actor)
 		{
-			continue;
+			return;
 		}
 
-		// Get all spline components on this actor
 		TArray<USplineComponent*> Splines;
 		Actor->GetComponents<USplineComponent>(Splines);
 		for (USplineComponent* Spline : Splines)
 		{
-			if (!Spline || Spline->GetNumberOfSplinePoints() < 2)
-			{
-				continue;
-			}
-
-			// BP_ProceduralTerrain names them Path1 / Path2 / Path3
-			if (Spline->GetName().Contains(TEXT("Path")))
-			{
-				PathSplines.Add(Spline);
-			}
+			ConsiderSpline(Spline);
 		}
+	};
+
+	// Prefer the procedural terrain actor — more reliable after map expansion.
+	UClass* TerrainClass = LoadClass<AActor>(
+		nullptr,
+		TEXT("/Game/Blueprints/BP_ProceduralTerrain.BP_ProceduralTerrain_C"));
+	if (TerrainClass)
+	{
+		TArray<AActor*> Terrains;
+		UGameplayStatics::GetAllActorsOfClass(World, TerrainClass, Terrains);
+		for (AActor* Terrain : Terrains)
+		{
+			CollectFromActor(Terrain);
+		}
+	}
+
+	if (NamedPaths.Num() == 0 && AnyValid.Num() == 0)
+	{
+		// Fallback: scan the whole world (older levels / renamed terrain).
+		TArray<AActor*> Actors;
+		UGameplayStatics::GetAllActorsOfClass(World, AActor::StaticClass(), Actors);
+		for (AActor* Actor : Actors)
+		{
+			CollectFromActor(Actor);
+		}
+	}
+
+	const TArray<USplineComponent*>& Chosen =
+		NamedPaths.Num() > 0 ? NamedPaths : AnyValid;
+	for (USplineComponent* Spline : Chosen)
+	{
+		PathSplines.Add(Spline);
+	}
+
+	if (PathSplines.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CollectPathSplines: no usable path splines found"));
+	}
+	else
+	{
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("CollectPathSplines: cached %d path(s) (named=%d any=%d)"),
+			PathSplines.Num(),
+			NamedPaths.Num(),
+			AnyValid.Num());
 	}
 }
 
@@ -263,7 +370,7 @@ TSubclassOf<ACaveboundBaseEnemy> ACaveboundGameMode::PickEnemyClassForSpawn() co
 
 	for (const FCaveboundEnemySpawnEntry& Entry : EnemySpawnPool)
 	{
-		if (!Entry.EnemyClass)
+		if (!Entry.EnemyClass || Entry.EnemyClass->HasAnyClassFlags(CLASS_Abstract))
 		{
 			continue;
 		}
@@ -282,7 +389,11 @@ TSubclassOf<ACaveboundBaseEnemy> ACaveboundGameMode::PickEnemyClassForSpawn() co
 
 	if (Eligible.Num() == 0)
 	{
-		return EnemyClass;
+		if (EnemyClass && !EnemyClass->HasAnyClassFlags(CLASS_Abstract))
+		{
+			return EnemyClass;
+		}
+		return ACaveboundEnemy::StaticClass();
 	}
 
 	// Light play-style bias: with several turrets, prefer Brute when it is eligible
@@ -307,16 +418,89 @@ TSubclassOf<ACaveboundBaseEnemy> ACaveboundGameMode::PickEnemyClassForSpawn() co
 
 void ACaveboundGameMode::StartRound()
 {
-	if (bGameOver || RoundState != ECaveboundRoundState::Idle)
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("StartRound called: bGameOver=%s RoundState=%d CollectionDuration=%.1fs"),
+		bGameOver ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(RoundState),
+		CollectionDuration);
+
+	if (bGameOver)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("StartRound skipped: game over"));
 		return;
 	}
 
+	// Combat began but nothing spawned (timer/hotreload glitch) — keep spawning.
+	if (RoundState == ECaveboundRoundState::Combat
+		&& EnemiesSpawnedThisRound == 0
+		&& EnemiesToSpawnThisRound > 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("StartRound: Combat with 0 spawned — forcing SpawnEnemy"));
+		EnsureEnemySpawnConfig();
+		CollectPathSplines();
+		SpawnEnemy();
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				EnemySpawnTimer,
+				this,
+				&ACaveboundGameMode::SpawnEnemy,
+				GetCurrentSpawnInterval(),
+				true,
+				GetCurrentSpawnInterval());
+		}
+		return;
+	}
+
+	// Stuck Collecting with no timer (hotreload / cleared handle) - recover into combat.
+	if (RoundState == ECaveboundRoundState::Collecting)
+	{
+		bool bTimerActive = false;
+		if (UWorld* World = GetWorld())
+		{
+			bTimerActive = World->GetTimerManager().IsTimerActive(CollectionTimer);
+		}
+		if (!bTimerActive)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("StartRound: Collecting with no timer - forcing BeginCombatPhase"));
+			BeginCombatPhase();
+			return;
+		}
+		UE_LOG(LogTemp, Warning, TEXT("StartRound skipped: already collecting (timer active)"));
+		return;
+	}
+
+	if (RoundState != ECaveboundRoundState::Idle)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("StartRound skipped: RoundState=%d (need Idle)"),
+			static_cast<int32>(RoundState));
+		return;
+	}
+
+	EnsureEnemySpawnConfig();
 	ClearRoundTimers();
 	EnemiesSpawnedThisRound = 0;
 	EnemiesAliveThisRound = 0;
 	NextPathIndex = 0;
 	RoundState = ECaveboundRoundState::Collecting;
+
+	const float GatherSeconds = FMath::Max(0.f, CollectionDuration);
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("StartRound: collecting for %.1fs (0 = immediate combat)"),
+		GatherSeconds);
+
+	if (GatherSeconds <= KINDA_SMALL_NUMBER)
+	{
+		BeginCombatPhase();
+		return;
+	}
 
 	if (UWorld* World = GetWorld())
 	{
@@ -324,30 +508,70 @@ void ACaveboundGameMode::StartRound()
 			CollectionTimer,
 			this,
 			&ACaveboundGameMode::BeginCombatPhase,
-			CollectionDuration,
+			GatherSeconds,
 			false);
+	}
+	else
+	{
+		BeginCombatPhase();
 	}
 }
 
 void ACaveboundGameMode::BeginCombatPhase()
 {
-	if (bGameOver || RoundState != ECaveboundRoundState::Collecting)
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("BeginCombatPhase called: bGameOver=%s RoundState=%d"),
+		bGameOver ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(RoundState));
+
+	if (bGameOver)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("BeginCombatPhase skipped: game over"));
+		return;
+	}
+
+	// Only valid from Collecting (StartRound sets that before the timer / immediate call).
+	if (RoundState != ECaveboundRoundState::Collecting)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("BeginCombatPhase skipped: RoundState=%d (need Collecting)"),
+			static_cast<int32>(RoundState));
 		return;
 	}
 
 	RoundState = ECaveboundRoundState::Combat;
+	EnsureEnemySpawnConfig();
 	PrepareWaveBudget();
+	CollectPathSplines();
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("BeginCombatPhase: spawn %d enemies, interval=%.2fs, paths=%d, class=%s"),
+		EnemiesToSpawnThisRound,
+		GetCurrentSpawnInterval(),
+		PathSplines.Num(),
+		EnemyClass ? *EnemyClass->GetName() : TEXT("null"));
+
+	// First enemy immediately — do not depend solely on the repeating timer first-fire.
+	SpawnEnemy();
 
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().SetTimer(
-			EnemySpawnTimer,
-			this,
-			&ACaveboundGameMode::SpawnEnemy,
-			GetCurrentSpawnInterval(),
-			true,
-			0.f);
+		if (EnemiesSpawnedThisRound < EnemiesToSpawnThisRound)
+		{
+			World->GetTimerManager().SetTimer(
+				EnemySpawnTimer,
+				this,
+				&ACaveboundGameMode::SpawnEnemy,
+				GetCurrentSpawnInterval(),
+				true,
+				GetCurrentSpawnInterval());
+		}
 	}
 }
 
@@ -436,6 +660,12 @@ void ACaveboundGameMode::SpawnEnemy()
 {
 	if (bGameOver || RoundState != ECaveboundRoundState::Combat)
 	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("SpawnEnemy skipped: gate bGameOver=%s RoundState=%d"),
+			bGameOver ? TEXT("true") : TEXT("false"),
+			static_cast<int32>(RoundState));
 		return;
 	}
 
@@ -448,49 +678,117 @@ void ACaveboundGameMode::SpawnEnemy()
 		return;
 	}
 
-	if (PathSplines.Num() == 0)
+	UWorld* World = GetWorld();
+	if (!World)
 	{
-		CollectPathSplines();
+		UE_LOG(LogTemp, Error, TEXT("SpawnEnemy skipped: no World"));
+		return;
 	}
 
-	// Cycle paths so enemies do not all walk the same lane
+	EnsureTree();
+
+	// Always refresh — weak refs can go stale after terrain expansion.
+	CollectPathSplines();
+
 	USplineComponent* ChosenSpline = nullptr;
 	const int32 PathCount = PathSplines.Num();
 	for (int32 Attempt = 0; Attempt < PathCount; ++Attempt)
 	{
 		USplineComponent* Candidate = PathSplines[(NextPathIndex + Attempt) % PathCount].Get();
-		if (Candidate && Candidate->GetNumberOfSplinePoints() >= 2)
+		if (!Candidate || !IsValid(Candidate) || Candidate->GetNumberOfSplinePoints() < 2)
 		{
-			ChosenSpline = Candidate;
-			NextPathIndex = (NextPathIndex + Attempt + 1) % PathCount;
-			break;
+			continue;
 		}
+
+		Candidate->UpdateSpline();
+		// Accept any rebuilt spline with at least two points — do not reject short lengths.
+		ChosenSpline = Candidate;
+		NextPathIndex = (NextPathIndex + Attempt + 1) % PathCount;
+		break;
 	}
 
-	UWorld* World = GetWorld();
-	const TSubclassOf<ACaveboundBaseEnemy> ChosenClass = PickEnemyClassForSpawn();
-	if (!World || !ChosenSpline || !ChosenClass)
+	TSubclassOf<ACaveboundBaseEnemy> ChosenClass = PickEnemyClassForSpawn();
+	if (!ChosenClass || ChosenClass->HasAnyClassFlags(CLASS_Abstract))
 	{
+		ChosenClass = EnemyClass;
+	}
+	if (!ChosenClass || ChosenClass->HasAnyClassFlags(CLASS_Abstract))
+	{
+		ChosenClass = ACaveboundEnemy::StaticClass();
+	}
+
+	if (!ChosenClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnEnemy skipped: no spawnable enemy class"));
+		return;
+	}
+
+	FVector SpawnLoc = FVector::ZeroVector;
+	if (ChosenSpline)
+	{
+		SpawnLoc = ChosenSpline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
+	}
+	else if (Tree)
+	{
+		// Last resort so a missing spline never silently yields zero enemies.
+		SpawnLoc = Tree->GetActorLocation() + FVector(800.f, 0.f, 50.f);
+		UE_LOG(LogTemp, Warning, TEXT("SpawnEnemy: no path spline — spawning near tree at %s"), *SpawnLoc.ToCompactString());
+	}
+	else
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("SpawnEnemy skipped: spline=missing class=%s paths=%d spawned=%d/%d"),
+			*ChosenClass->GetName(),
+			PathCount,
+			EnemiesSpawnedThisRound,
+			EnemiesToSpawnThisRound);
 		return;
 	}
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	if (ACaveboundBaseEnemy* Enemy = World->SpawnActor<ACaveboundBaseEnemy>(
+	SpawnParams.Owner = this;
+	ACaveboundBaseEnemy* Enemy = World->SpawnActor<ACaveboundBaseEnemy>(
 		ChosenClass,
-		ChosenSpline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World),
+		SpawnLoc,
 		FRotator::ZeroRotator,
-		SpawnParams))
+		SpawnParams);
+	if (!Enemy)
 	{
-		// Bind this enemy to the chosen path and the centre tree.
-		Enemy->InitAlongPath(ChosenSpline, Tree);
-		++EnemiesSpawnedThisRound;
-		++EnemiesAliveThisRound;
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("SpawnEnemy: SpawnActor failed for %s (abstract=%s)"),
+			*ChosenClass->GetName(),
+			ChosenClass->HasAnyClassFlags(CLASS_Abstract) ? TEXT("yes") : TEXT("no"));
+		return;
+	}
 
-		if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound)
-		{
-			World->GetTimerManager().ClearTimer(EnemySpawnTimer);
-		}
+	// Cycle left / centre / right so packs share the path without stacking
+	const float LaneSlots[3] = { -0.75f, 0.f, 0.75f };
+	const float MaxLane = 200.f;
+	const float PreferredLane = LaneSlots[EnemiesSpawnedThisRound % 3] * MaxLane;
+
+	Enemy->InitAlongPath(ChosenSpline, Tree, PreferredLane);
+	++EnemiesSpawnedThisRound;
+	++EnemiesAliveThisRound;
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("SpawnEnemy: spawned %s on %s at %s (%d/%d alive=%d)"),
+		*ChosenClass->GetName(),
+		ChosenSpline ? *ChosenSpline->GetName() : TEXT("none"),
+		*Enemy->GetActorLocation().ToCompactString(),
+		EnemiesSpawnedThisRound,
+		EnemiesToSpawnThisRound,
+		EnemiesAliveThisRound);
+
+	if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound)
+	{
+		World->GetTimerManager().ClearTimer(EnemySpawnTimer);
 	}
 }
 
@@ -510,7 +808,7 @@ void ACaveboundGameMode::RegisterEnemyDefeated()
 	}
 }
 
-// Seconds left in the collection phase. Returns 0 unless Collecting 
+// Seconds left in the collection phase. Returns 0 unless Collecting.
 float ACaveboundGameMode::GetCollectionTimeRemaining() const
 {
 	if (RoundState != ECaveboundRoundState::Collecting)
@@ -520,10 +818,15 @@ float ACaveboundGameMode::GetCollectionTimeRemaining() const
 
 	if (UWorld* World = GetWorld())
 	{
-		return World->GetTimerManager().GetTimerRemaining(CollectionTimer);
+		const FTimerManager& TimerManager = World->GetTimerManager();
+		if (TimerManager.IsTimerActive(CollectionTimer))
+		{
+			return FMath::Max(0.f, TimerManager.GetTimerRemaining(CollectionTimer));
+		}
 	}
 
-	return 0.f;
+	// Collecting but timer not running yet (or duration was 0) — report full duration.
+	return FMath::Max(0.f, CollectionDuration);
 }
 
 bool ACaveboundGameMode::CanCollectWood() const

@@ -30,7 +30,7 @@ public:
 	virtual float GetHoverMaxHealth_Implementation() const override { return MaxHealth; }
 
 	// Which path to walk and target to attack 
-	void InitAlongPath(USplineComponent* Spline, ACaveboundTree* InTree);
+	void InitAlongPath(USplineComponent* Spline, ACaveboundTree* InTree, float InPreferredLaneOffset = 0.f);
 
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	virtual void ApplyDamage(float Amount);
@@ -56,6 +56,7 @@ public:
 	int32 GetMinDifficultyToSpawn() const { return MinDifficultyToSpawn; }
 
 	float GetDistanceAlongSpline() const { return DistanceAlongSpline; }
+	float GetMaxLaneOffset() const { return MaxLaneOffset; }
 
 	bool IsDead() const { return Health <= 0.f; }
 
@@ -127,26 +128,30 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Boids")
 	bool bUseBoids = true;
 
+	// How far sideways neighbours must be before they stop pushing each other
 	UPROPERTY(EditAnywhere, Category = "Boids")
-	float SeparationRadius = 180.f;
+	float SeparationRadius = 220.f;
 
 	UPROPERTY(EditAnywhere, Category = "Boids")
-	float SeparationStrength = 1.0f;
+	float SeparationStrength = 1.35f;
+
+	// Keep low — cohesion pulls packs back onto the same spot on the spline
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float AlignmentStrength = 0.05f;
 
 	UPROPERTY(EditAnywhere, Category = "Boids")
-	float AlignmentStrength = 0.15f;
+	float CohesionStrength = 0.f;
+
+	// Max lateral offset from the path centre (cm)
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float MaxLaneOffset = 200.f;
+
+	// Preferred distance between enemies along the same path (cm)
+	UPROPERTY(EditAnywhere, Category = "Boids")
+	float ForwardStaggerDistance = 160.f;
 
 	UPROPERTY(EditAnywhere, Category = "Boids")
-	float CohesionStrength = 0.1f;
-
-	UPROPERTY(EditAnywhere, Category = "Boids")
-	float MaxLaneOffset = 150.f;
-
-	UPROPERTY(EditAnywhere, Category = "Boids")
-	float ForwardStaggerDistance = 80.f;
-
-	UPROPERTY(EditAnywhere, Category = "Boids")
-	float ForwardStaggerStrength = 0.35f;
+	float ForwardStaggerStrength = 0.65f;
 
 	FTimerHandle HitFlashTimer;
 
@@ -155,6 +160,8 @@ protected:
 
 	// How far along the spline we have walked (cm)
 	float DistanceAlongSpline = 0.f;
+	// Stable side-of-path slot assigned at spawn (-Max..+Max)
+	float PreferredLaneOffset = 0.f;
 	// Time since last attack pulse
 	float AttackTime = 0.f;
 	float ActiveSlowMultiplier = 1.f;

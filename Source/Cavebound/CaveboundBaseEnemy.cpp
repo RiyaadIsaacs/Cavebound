@@ -13,29 +13,48 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	SetRootComponent(VisualMesh);
-	// Enemies Block WorldDynamic by default, which turns arrow Overlap into Block and
-	// kills BeginOverlap. Overlap WorldDynamic so projectiles can register hits.
-	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	// Query-only: path movement teleports along the spline, so physics blocking
+	// between enemies fights the boid offsets and makes packs look stuck.
+	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
-	VisualMesh->SetCollisionResponseToAllChannels(ECR_Block);
-	VisualMesh->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+	VisualMesh->SetCollisionResponseToAllChannels(ECR_Overlap);
+	VisualMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	VisualMesh->SetGenerateOverlapEvents(true);
 
 	Health = MaxHealth;
 }
 
 // Initialize the enemy to walk along a spline 
-void ACaveboundBaseEnemy::InitAlongPath(USplineComponent* Spline, ACaveboundTree* InTree)
+void ACaveboundBaseEnemy::InitAlongPath(USplineComponent* Spline, ACaveboundTree* InTree, float InPreferredLaneOffset)
 {
 	PathSpline = Spline;
 	Tree = InTree;
 	DistanceAlongSpline = 0.f;
 	AttackTime = 0.f;
+	PreferredLaneOffset = FMath::Clamp(InPreferredLaneOffset, -MaxLaneOffset, MaxLaneOffset);
 
 	if (Spline)
 	{
-		const FVector Start = Spline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
-		SetActorLocation(Start + FVector(0.f, 0.f, PathHeightOffset));
+		const FVector PathPoint = Spline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
+		FVector Tangent = Spline->GetTangentAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
+		Tangent.Z = 0.f;
+
+		FVector PathRight = FVector::CrossProduct(FVector::UpVector, Tangent.GetSafeNormal());
+		if (!PathRight.Normalize())
+		{
+			PathRight = FVector::RightVector;
+		}
+
+		SetActorLocation(
+			PathPoint + PathRight * PreferredLaneOffset + FVector(0.f, 0.f, PathHeightOffset),
+			false,
+			nullptr,
+			ETeleportType::TeleportPhysics);
+
+		if (!Tangent.IsNearlyZero())
+		{
+			SetActorRotation(Tangent.Rotation());
+		}
 	}
 }
 
@@ -211,29 +230,33 @@ float ACaveboundBaseEnemy::ComputeBoidLaneOffset(const FVector& PathPoint, const
 {
 	if (!bUseBoids || PathRight.IsNearlyZero())
 	{
-		return 0.f;
+		return PreferredLaneOffset;
 	}
 
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		return 0.f;
+		return PreferredLaneOffset;
 	}
 
 	TArray<AActor*> FoundEnemies;
 	UGameplayStatics::GetAllActorsOfClass(World, ACaveboundBaseEnemy::StaticClass(), FoundEnemies);
 
-	FVector Separation = FVector::ZeroVector;
-	FVector Alignment = FVector::ZeroVector;
-	FVector CohesionSum = FVector::ZeroVector;
+	float SeparationAlongLane = 0.f;
 	int32 NeighbourCount = 0;
 
 	const FVector MyLocation = GetActorLocation();
 
 	for (AActor* Actor : FoundEnemies)
 	{
-		ACaveboundBaseEnemy* Other = Cast<ACaveboundBaseEnemy>(Actor);
+		const ACaveboundBaseEnemy* Other = Cast<ACaveboundBaseEnemy>(Actor);
 		if (!Other || Other == this || Other->IsDead())
+		{
+			continue;
+		}
+
+		// Only flock against enemies sharing this path so packs stay in their lane corridor
+		if (Other->PathSpline.Get() != PathSpline.Get())
 		{
 			continue;
 		}
@@ -247,30 +270,19 @@ float ACaveboundBaseEnemy::ComputeBoidLaneOffset(const FVector& PathPoint, const
 
 		++NeighbourCount;
 
-		// Stronger push when closer
+		// Push along the path's right vector only (keeps everyone on the road)
+		const float AlongLane = FVector::DotProduct(ToOther.GetSafeNormal2D(), PathRight);
 		const float Push = (SeparationRadius - Dist) / SeparationRadius;
-		Separation -= FVector(ToOther.X, ToOther.Y, 0.f).GetSafeNormal() * Push;
-
-		Alignment += Other->GetActorForwardVector();
-		CohesionSum += Other->GetActorLocation();
+		SeparationAlongLane -= AlongLane * Push * SeparationStrength;
 	}
 
 	if (NeighbourCount == 0)
 	{
-		return 0.f;
+		return PreferredLaneOffset;
 	}
 
-	Alignment /= static_cast<float>(NeighbourCount);
-	const FVector Cohesion = ((CohesionSum / static_cast<float>(NeighbourCount)) - MyLocation).GetSafeNormal2D();
-
-	FVector Combined =
-		Separation * SeparationStrength
-		+ Alignment.GetSafeNormal2D() * AlignmentStrength
-		+ Cohesion * CohesionStrength;
-
-	Combined.Z = 0.f;
-	const float LaneOffset = FVector::DotProduct(Combined, PathRight);
-	return FMath::Clamp(LaneOffset * SeparationRadius, -MaxLaneOffset, MaxLaneOffset);
+	const float Offset = PreferredLaneOffset + SeparationAlongLane * SeparationRadius * 0.35f;
+	return FMath::Clamp(Offset, -MaxLaneOffset, MaxLaneOffset);
 }
 
 float ACaveboundBaseEnemy::ComputeForwardStagger() const
@@ -292,30 +304,33 @@ float ACaveboundBaseEnemy::ComputeForwardStagger() const
 	float SpeedMul = 1.f;
 	for (AActor* Actor : FoundEnemies)
 	{
-		ACaveboundBaseEnemy* Other = Cast<ACaveboundBaseEnemy>(Actor);
+		const ACaveboundBaseEnemy* Other = Cast<ACaveboundBaseEnemy>(Actor);
 		if (!Other || Other == this || Other->IsDead())
 		{
 			continue;
 		}
 
-		// Only stagger against enemies on the same spline
 		if (Other->PathSpline.Get() != PathSpline.Get())
 		{
 			continue;
 		}
 
 		const float DistDelta = Other->GetDistanceAlongSpline() - DistanceAlongSpline;
-		if (FMath::Abs(DistDelta) < ForwardStaggerDistance)
+		if (FMath::Abs(DistDelta) >= ForwardStaggerDistance)
 		{
-			// If nearly tied or slightly ahead of us, ease off so packs desync
-			if (DistDelta >= -KINDA_SMALL_NUMBER)
-			{
-				SpeedMul = FMath::Min(SpeedMul, 1.f - ForwardStaggerStrength);
-			}
+			continue;
+		}
+
+		// Someone ahead / overlapping us on the spline — ease off harder the closer they are
+		if (DistDelta >= -KINDA_SMALL_NUMBER)
+		{
+			const float Closeness = 1.f - (FMath::Abs(DistDelta) / ForwardStaggerDistance);
+			const float SlowAmount = ForwardStaggerStrength * Closeness;
+			SpeedMul = FMath::Min(SpeedMul, 1.f - SlowAmount);
 		}
 	}
 
-	return FMath::Clamp(SpeedMul, 0.4f, 1.f);
+	return FMath::Clamp(SpeedMul, 0.25f, 1.f);
 }
 
 void ACaveboundBaseEnemy::Tick(float DeltaTime)

@@ -40,10 +40,10 @@ ACaveboundEnemy::ACaveboundEnemy()
 	HitVolume->SetVisibility(false);
 	HitVolume->SetHiddenInGame(true);
 	HitVolume->SetCastShadow(false);
-	HitVolume->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	HitVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	HitVolume->SetCollisionObjectType(ECC_WorldDynamic);
-	HitVolume->SetCollisionResponseToAllChannels(ECR_Block);
-	HitVolume->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+	HitVolume->SetCollisionResponseToAllChannels(ECR_Overlap);
+	HitVolume->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	HitVolume->SetGenerateOverlapEvents(true);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));

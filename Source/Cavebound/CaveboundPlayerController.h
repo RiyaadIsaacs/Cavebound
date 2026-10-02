@@ -53,6 +53,10 @@ public:
 
 	void CloseBuildMenu();
 
+	// C++ entry for Start Wave (HUD button + Enter key). Avoids broken BP casts after hotreload.
+	UFUNCTION(BlueprintCallable, Category = "Cavebound")
+	void RequestStartRound();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
