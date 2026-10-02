@@ -11,9 +11,7 @@ class USceneComponent;
 class UStaticMeshComponent;
 class ACaveboundBaseEnemy;
 
-/**
- * Placeable defender the enemies will attack
- */
+// Generic turret
 UCLASS(Blueprintable)
 class CAVEBOUND_API ACaveboundTurret : public AActor, public ICaveboundHoverHealth
 {
@@ -41,6 +39,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	int32 GetCost() const { return Cost; }
+
+	// Cost from the C++ class, even when a blueprint has saved an older number.
+	static int32 GetCostForClass(TSubclassOf<AActor> DefenderClass);
 
 	bool IsDestroyed() const { return Health <= 0.f; }
 
@@ -72,31 +73,24 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	float Health = 150.f;
 
-	// False for traps that do not shoot arrows.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	bool bAutoFire = true;
 
-	// How far this defender looks for an enemy.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AttackRange = 1200.f;
 
-	// Seconds between shots.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float FireInterval = 1.0f;
 
-	// Used when the blueprint has no fire-point arrow.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (MakeEditWidget = true))
 	FVector FirePointOffset = FVector(40.f, 0.f, 220.f);
 
-	// Degrees per second. Fast enough to snap around, slow enough that the tower is seen turning.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float TurnSpeed = 720.f;
 
-	// A shot only leaves when the enemy is inside this many degrees left or right of the fire point.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AimHalfAngle = 45.f;
 
-	// The arrow placed on a blueprint. Shots come out of this.
 	TObjectPtr<UArrowComponent> FirePoint;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
@@ -105,18 +99,16 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float ProjectileSpeed = 1200.f;
 
-	// Which actor gets spawned as the shot.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	TSubclassOf<AActor> ProjectileClass;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
-	float HitFlashDuration = 0.15f;
+	float HitFlashDuration = 0.5f;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	FLinearColor HitFlashColor = FLinearColor(1.f, 0.f, 0.f);
 
 	FTimerHandle HitFlashTimer;
 
-	// How long we have waited since the last shot.
 	float FireTime = 0.f;
 };

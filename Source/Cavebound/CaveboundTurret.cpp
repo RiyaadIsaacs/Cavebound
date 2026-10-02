@@ -10,15 +10,32 @@
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 
+int32 ACaveboundTurret::GetCostForClass(TSubclassOf<AActor> DefenderClass)
+{
+	UClass* Class = DefenderClass.Get();
+	while (Class && Class->IsChildOf(StaticClass()))
+	{
+		if (!Class->HasAnyClassFlags(CLASS_CompiledFromBlueprint))
+		{
+			if (const ACaveboundTurret* Defaults = Cast<ACaveboundTurret>(Class->GetDefaultObject()))
+			{
+				return Defaults->GetCost();
+			}
+			return 0;
+		}
+		Class = Class->GetSuperClass();
+	}
+
+	return 0;
+}
+
 ACaveboundTurret::ACaveboundTurret()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	// Empty root so the mesh and the fire point can sit on the same actor.
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
 
-	// The archer tower is the normal turret body. The file is about 15 meters tall, so it is scaled down.
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	VisualMesh->SetupAttachment(SceneRoot);
 	VisualMesh->SetRelativeScale3D(FVector(0.2f));
@@ -26,8 +43,7 @@ ACaveboundTurret::ACaveboundTurret()
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Block);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(
-		TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL1.SM_ArcherTower_LVL1"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL1.SM_ArcherTower_LVL1"));
 	if (towerMesh.Succeeded())
 	{
 		VisualMesh->SetStaticMesh(towerMesh.Object);
@@ -46,10 +62,8 @@ void ACaveboundTurret::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Blueprint children can change MaxHealth. Start the bar at that number.
 	Health = MaxHealth;
 
-	// The fire-point arrow is added on the blueprint, so it exists once play starts.
 	RememberFirePoint();
 }
 
@@ -57,7 +71,6 @@ void ACaveboundTurret::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// A broken turret, or one that does not shoot, does nothing.
 	if (!bAutoFire || IsDestroyed())
 	{
 		return;
@@ -76,7 +89,6 @@ void ACaveboundTurret::Tick(float DeltaTime)
 		}
 	}
 
-	// Spin toward the closest enemy, then shoot only while it sits in front of the fire point.
 	ACaveboundBaseEnemy* closestEnemy = FindNearestEnemy();
 	TurnTowardEnemy(closestEnemy, DeltaTime);
 
@@ -89,7 +101,6 @@ void ACaveboundTurret::Tick(float DeltaTime)
 
 void ACaveboundTurret::ApplyDamage(float Amount)
 {
-	// Ignore hits on a dead turret, and ignore a hit of zero.
 	if (IsDestroyed() || Amount <= 0.f)
 	{
 		return;
@@ -106,7 +117,7 @@ void ACaveboundTurret::ApplyDamage(float Amount)
 
 void ACaveboundTurret::PlayDamageFlash()
 {
-	// Flash every mesh on this turret red for a short time.
+	//Enemy flash
 	TArray<UStaticMeshComponent*> meshList;
 	GetComponents<UStaticMeshComponent>(meshList);
 	FCaveboundDamageFlash::FlashMeshes(this, meshList, HitFlashTimer, HitFlashColor, HitFlashDuration);
@@ -125,7 +136,6 @@ ACaveboundBaseEnemy* ACaveboundTurret::FindNearestEnemy() const
 		return nullptr;
 	}
 
-	// Look at every enemy and keep the closest one that is still inside range.
 	TArray<AActor*> allEnemies;
 	UGameplayStatics::GetAllActorsOfClass(world, ACaveboundBaseEnemy::StaticClass(), allEnemies);
 
@@ -154,7 +164,6 @@ ACaveboundBaseEnemy* ACaveboundTurret::FindNearestEnemy() const
 
 void ACaveboundTurret::RememberFirePoint()
 {
-	// Prefer an arrow whose name says fire. Fall back to the first arrow on the actor.
 	TArray<UArrowComponent*> arrows;
 	GetComponents<UArrowComponent>(arrows);
 
@@ -181,7 +190,6 @@ void ACaveboundTurret::RememberFirePoint()
 
 void ACaveboundTurret::GetShotStart(FVector& shotLocation, FVector& shotForward) const
 {
-	// The blueprint arrow is the barrel. Without one, use the old offset and the actor front.
 	if (FirePoint)
 	{
 		shotLocation = FirePoint->GetComponentLocation();
@@ -204,7 +212,6 @@ float ACaveboundTurret::GetYawErrorToEnemy(const ACaveboundBaseEnemy* enemy) con
 	FVector shotForward;
 	GetShotStart(shotLocation, shotForward);
 
-	// Yaw only. Up and down do not matter for this check.
 	FVector toEnemy = enemy->GetActorLocation() - shotLocation;
 	toEnemy.Z = 0.f;
 	shotForward.Z = 0.f;
@@ -223,7 +230,6 @@ void ACaveboundTurret::TurnTowardEnemy(const ACaveboundBaseEnemy* enemy, float D
 		return;
 	}
 
-	// Step the yaw a little each frame so the turn is visible, then stop on the target.
 	const float yawError = GetYawErrorToEnemy(enemy);
 	const float step = FMath::Clamp(yawError, -TurnSpeed * DeltaTime, TurnSpeed * DeltaTime);
 
@@ -246,7 +252,6 @@ bool ACaveboundTurret::TryFireAtEnemy(ACaveboundBaseEnemy* closestEnemy)
 		return false;
 	}
 
-	// Spawn the shot at the fire point and aim it at the enemy's middle.
 	FVector arrowSpawnPoint;
 	FVector unusedForward;
 	GetShotStart(arrowSpawnPoint, unusedForward);
@@ -258,7 +263,7 @@ bool ACaveboundTurret::TryFireAtEnemy(ACaveboundBaseEnemy* closestEnemy)
 	spawnSettings.Owner = this;
 	spawnSettings.Instigator = GetInstigator();
 
-	// Spawn the projectile. A Cavebound arrow also gets the target, damage, and speed.
+	// Spawn the projectile
 	if (AActor* spawnedArrow = world->SpawnActor<AActor>(ProjectileClass, arrowSpawnPoint, aimDirection, spawnSettings))
 	{
 		TArray<UPrimitiveComponent*> arrowParts;

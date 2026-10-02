@@ -44,7 +44,7 @@ ACaveboundSnare::ACaveboundSnare()
 
 void ACaveboundSnare::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// If the trap is removed while it is holding someone, let that enemy walk again.
+	// Allows enemy to act
 	if (ACaveboundBaseEnemy* heldEnemy = TrappedEnemy.Get())
 	{
 		heldEnemy->ReleaseSnare(this);
@@ -199,10 +199,7 @@ void ACaveboundSnare::ShowRope(ACaveboundBaseEnemy* CaughtEnemy)
 		const float alongWrap = static_cast<float>(step) / static_cast<float>(wrapSteps);
 		const float angle = alongWrap * wraps * 2.f * PI;
 		const float heightOnBody = FMath::Lerp(topOfWrap, bottomOfWrap, alongWrap);
-		const FVector aroundBody = enemyFeet + FVector(
-			FMath::Cos(angle) * wrapRadius,
-			FMath::Sin(angle) * wrapRadius,
-			heightOnBody);
+		const FVector aroundBody = enemyFeet + FVector( FMath::Cos(angle) * wrapRadius,	FMath::Sin(angle) * wrapRadius,	heightOnBody);
 		ropePoints.Add(aroundBody);
 	}
 

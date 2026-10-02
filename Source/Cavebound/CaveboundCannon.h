@@ -4,9 +4,7 @@
 #include "CaveboundTurret.h"
 #include "CaveboundCannon.generated.h"
 
-/**
- * Expensive long-range defender. Fires slowly for high damage.
- */
+// Long range defender
 UCLASS(Blueprintable)
 class CAVEBOUND_API ACaveboundCannon : public ACaveboundTurret
 {
