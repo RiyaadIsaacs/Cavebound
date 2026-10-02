@@ -315,6 +315,10 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 
 	if (bLMB && !bLeftMouseWasDown && bMouseInViewport)
 	{
+		if (BuildMenu && BuildMenu->IsInViewport() && !BuildMenu->IsPointerInsideMenu())
+		{
+			CloseBuildMenu();
+		}
 		OnClickMove();
 	}
 	bLeftMouseWasDown = bLMB;
@@ -421,7 +425,7 @@ bool ACaveboundPlayerController::IsPointerOverInteractiveUI() const
 
 void ACaveboundPlayerController::OnClickMove()
 {
-	if (bPauseMenuOpen || IsPointerOverInteractiveUI())
+	if (bPauseMenuOpen || (BuildMenu && BuildMenu->IsInViewport()) || IsPointerOverInteractiveUI())
 	{
 		return;
 	}
@@ -766,11 +770,6 @@ void ACaveboundPlayerController::UpdateBuildSlotPresentation()
 	AActor* Closest = nullptr;
 	CollectInteractableSlots(NearbySlots, Closest);
 
-	if (BuildMenu && BuildMenu->IsInViewport() && MenuSlot.Get() != Closest)
-	{
-		CloseBuildMenu();
-	}
-
 	for (int32 Index = HighlightedSlots.Num() - 1; Index >= 0; --Index)
 	{
 		AActor* Highlighted = HighlightedSlots[Index].Get();
@@ -808,10 +807,6 @@ void ACaveboundPlayerController::UpdateBuildSlotPresentation()
 		{
 			BuildMenu->SetHoverScreenPosition(ScreenPosition);
 			BuildMenu->SetHoverVisible(true);
-		}
-		else
-		{
-			BuildMenu->SetHoverVisible(false);
 		}
 		return;
 	}

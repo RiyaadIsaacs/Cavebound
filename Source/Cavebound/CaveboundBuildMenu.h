@@ -6,10 +6,10 @@
 
 class UButton;
 class UCanvasPanelSlot;
+class UBorder;
 class UTextBlock;
 class UVerticalBox;
 
-/** Remembers which defender a menu button builds. */
 UCLASS()
 class UCaveboundBuildChoiceProxy : public UObject
 {
@@ -26,9 +26,7 @@ public:
 	void HandleClicked();
 };
 
-/**
- * Small picker shown at a build slot. Lists defender types and their wood cost.
- */
+
 UCLASS()
 class CAVEBOUND_API UCaveboundBuildMenu : public UUserWidget
 {
@@ -38,6 +36,7 @@ public:
 	void OpenForSlot(AActor* Slot);
 	void SetHoverScreenPosition(FVector2D Position);
 	void SetHoverVisible(bool bVisible);
+	bool IsPointerInsideMenu() const;
 
 protected:
 	virtual void NativeOnInitialized() override;
@@ -55,6 +54,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCanvasPanelSlot> PanelSlot;
+
+	UPROPERTY()
+	TObjectPtr<UBorder> FrameWidget;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UCaveboundBuildChoiceProxy>> ChoiceProxies;

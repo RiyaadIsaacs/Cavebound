@@ -10,11 +10,16 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "Components/ButtonSlot.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Framework/Application/SlateApplication.h"
 
 void UCaveboundBuildChoiceProxy::HandleClicked()
 {
@@ -33,29 +38,30 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 		return;
 	}
 
-	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	SetVisibility(ESlateVisibility::Visible);
 
 	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("BuildMenuCanvas"));
-	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	Canvas->SetVisibility(ESlateVisibility::Visible);
 	WidgetTree->RootWidget = Canvas;
 
 	UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BuildMenuFrame"));
+	FrameWidget = Frame;
 	Frame->SetPadding(FMargin(16.f, 12.f));
-	Frame->SetBrushColor(FLinearColor(0.08f, 0.06f, 0.04f, 0.94f));
+	Frame->SetBrushColor(FLinearColor(0.12f, 0.12f, 0.12f, 0.94f));
 
 	UVerticalBox* Body = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BuildMenuBody"));
 	Frame->SetContent(Body);
 
 	UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildMenuTitle"));
 	Title->SetText(FText::FromString(TEXT("Choose a defender")));
-	Title->SetColorAndOpacity(FSlateColor(FLinearColor(0.96f, 0.9f, 0.75f, 1.f)));
+	Title->SetColorAndOpacity(FSlateColor(FLinearColor(0.9f, 0.9f, 0.9f, 1.f)));
 	if (UVerticalBoxSlot* TitleSlot = Body->AddChildToVerticalBox(Title))
 	{
 		TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 	}
 
 	WoodText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildMenuWood"));
-	WoodText->SetColorAndOpacity(FSlateColor(FLinearColor(0.82f, 0.74f, 0.55f, 1.f)));
+	WoodText->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.75f, 0.75f, 1.f)));
 	if (UVerticalBoxSlot* WoodSlot = Body->AddChildToVerticalBox(WoodText))
 	{
 		WoodSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
@@ -71,7 +77,11 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 		StatusSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 	}
 
-	PanelSlot = Canvas->AddChildToCanvas(Frame);
+	USizeBox* MenuSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BuildMenuSize"));
+	MenuSize->SetMinDesiredWidth(220.f);
+	MenuSize->SetContent(Frame);
+
+	PanelSlot = Canvas->AddChildToCanvas(MenuSize);
 	if (PanelSlot)
 	{
 		PanelSlot->SetAnchors(FAnchors(0.f, 0.f));
@@ -90,7 +100,21 @@ void UCaveboundBuildMenu::SetHoverScreenPosition(FVector2D Position)
 
 void UCaveboundBuildMenu::SetHoverVisible(bool bVisible)
 {
-	SetVisibility(bVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	if (WidgetTree && WidgetTree->RootWidget)
+	{
+		WidgetTree->RootWidget->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+}
+
+bool UCaveboundBuildMenu::IsPointerInsideMenu() const
+{
+	if (!FrameWidget || !FSlateApplication::IsInitialized())
+	{
+		return false;
+	}
+
+	return FrameWidget->GetCachedGeometry().IsUnderLocation(FSlateApplication::Get().GetCursorPos());
 }
 
 void UCaveboundBuildMenu::OpenForSlot(AActor* BuildSlot)
@@ -122,7 +146,6 @@ void UCaveboundBuildMenu::OpenForSlot(AActor* BuildSlot)
 		AddChoice(TEXT("Turret"), TurretClass);
 	}
 
-	// Blueprint versions hold the fire-point arrows placed in the editor.
 	if (UClass* SentryClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_CaveboundSentry.BP_CaveboundSentry_C")))
 	{
 		AddChoice(TEXT("Sentry"), SentryClass);
@@ -154,13 +177,33 @@ void UCaveboundBuildMenu::AddChoice(const FString& Label, TSubclassOf<AActor> De
 	const int32 Cost = ACaveboundTurret::GetCostForClass(DefenderClass);
 
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
-	Button->SetBackgroundColor(FLinearColor(0.22f, 0.16f, 0.1f, 1.f));
+	Button->SetBackgroundColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.f));
+
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+	Button->AddChild(Row);
+	if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(Button->GetContentSlot()))
+	{
+		ContentSlot->SetHorizontalAlignment(HAlign_Fill);
+	}
 
 	UTextBlock* LabelText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-	LabelText->SetText(FText::FromString(FString::Printf(TEXT("%s    %d wood"), *Label, Cost)));
+	LabelText->SetText(FText::FromString(Label));
 	LabelText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-	LabelText->SetJustification(ETextJustify::Center);
-	Button->AddChild(LabelText);
+	LabelText->SetJustification(ETextJustify::Left);
+	if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelText))
+	{
+		LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	}
+
+	UTextBlock* CostText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+	CostText->SetText(FText::FromString(FString::Printf(TEXT("%d wood"), Cost)));
+	CostText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	CostText->SetJustification(ETextJustify::Right);
+	if (UHorizontalBoxSlot* CostSlot = Row->AddChildToHorizontalBox(CostText))
+	{
+		CostSlot->SetHorizontalAlignment(HAlign_Right);
+		CostSlot->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
+	}
 
 	UCaveboundBuildChoiceProxy* Proxy = NewObject<UCaveboundBuildChoiceProxy>(this);
 	Proxy->DefenderClass = DefenderClass;
