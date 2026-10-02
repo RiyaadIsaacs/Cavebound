@@ -112,6 +112,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	int32 GetRoundIndex() const { return RoundIndex; }
 
+	// Wood gained per mine tick 
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	int32 GetWoodPerHarvest() const;
+
 	// Build pads on the current terrain without regenerating path
 	// EndRound calls this when enabled
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
@@ -208,6 +212,10 @@ protected:
 	// HUD "Next Wave" countdown uses GetCollectionTimeRemaining() from this timer.
 	UPROPERTY(EditAnywhere, Category = "Round", meta = (ClampMin = "0.0"))
 	float CollectionDuration = 30.f;
+
+	// Extra wood per harvest for every 2 cleared rounds 
+	UPROPERTY(EditAnywhere, Category = "Round", meta = (ClampMin = "0"))
+	int32 WoodBonusEveryTwoRounds = 5;
 
 	// Used as the base count before DifficultyScore / round bonuses
 	UPROPERTY(EditAnywhere, Category = "Round")

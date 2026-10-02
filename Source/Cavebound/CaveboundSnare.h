@@ -21,6 +21,8 @@ class CAVEBOUND_API ACaveboundSnare : public ACaveboundTurret
 public:
 	ACaveboundSnare();
 
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Snare")); }
+
 	virtual void Tick(float DeltaTime) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 

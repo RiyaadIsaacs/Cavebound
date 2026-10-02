@@ -27,6 +27,7 @@ public:
 	// HUD popup bar on mouse hover
 	virtual float GetHoverHealth_Implementation() const override { return Health; }
 	virtual float GetHoverMaxHealth_Implementation() const override { return MaxHealth; }
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Turret")); }
 
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	void ApplyDamage(float Amount);

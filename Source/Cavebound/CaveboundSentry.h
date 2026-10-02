@@ -14,4 +14,6 @@ class CAVEBOUND_API ACaveboundSentry : public ACaveboundTurret
 
 public:
 	ACaveboundSentry();
+
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Sentry")); }
 };

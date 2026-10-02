@@ -31,6 +31,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetHoveredMaxHealth() const;
 
+	// Left-side name for the hover popup (e.g. "Brute")
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	FText GetHoveredDisplayName() const;
+
+	// Right-side "current / max" text for the hover popup
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	FText GetHoveredHealthText() const;
+
 	UFUNCTION(BlueprintPure, Category = "Cavebound|Pause")
 	bool IsPauseMenuOpen() const { return bPauseMenuOpen; }
 

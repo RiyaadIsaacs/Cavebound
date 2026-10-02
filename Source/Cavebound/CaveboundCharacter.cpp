@@ -250,7 +250,7 @@ void ACaveboundCharacter::TryMine(float DeltaTime)
 		{
 			if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
 			{
-				GameMode->AddWood(Tree->GetWoodPerHarvest());
+				GameMode->AddWood(GameMode->GetWoodPerHarvest());
 			}
 		}
 	}

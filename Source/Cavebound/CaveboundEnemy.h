@@ -25,6 +25,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void ApplyDamage(float Amount) override;
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Minion")); }
 
 protected:
 	virtual void OnDeath() override;

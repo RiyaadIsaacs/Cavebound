@@ -11,7 +11,7 @@ class CAVEBOUND_API UCaveboundHoverHealth : public UInterface
 };
 
 /**
- * Actors the HUD can show HP for on mouse hover 
+ * Actors the HUD can show HP / name for on mouse hover.
  */
 class CAVEBOUND_API ICaveboundHoverHealth
 {
@@ -23,4 +23,8 @@ public:
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Cavebound")
 	float GetHoverMaxHealth() const;
+
+	// Left-side label on the hover popup 
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Cavebound")
+	FText GetHoverDisplayName() const;
 };

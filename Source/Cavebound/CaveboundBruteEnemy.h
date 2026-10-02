@@ -15,6 +15,8 @@ class CAVEBOUND_API ACaveboundBruteEnemy : public ACaveboundBaseEnemy
 public:
 	ACaveboundBruteEnemy();
 
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Brute")); }
+
 protected:
 	virtual AActor* ResolveAttackTarget() const override;
 };

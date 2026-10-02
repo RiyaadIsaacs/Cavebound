@@ -14,4 +14,6 @@ class CAVEBOUND_API ACaveboundCannon : public ACaveboundTurret
 
 public:
 	ACaveboundCannon();
+
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Cannon")); }
 };

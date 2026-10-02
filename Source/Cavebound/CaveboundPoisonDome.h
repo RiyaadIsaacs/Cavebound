@@ -19,6 +19,8 @@ class CAVEBOUND_API ACaveboundPoisonDome : public ACaveboundTurret
 public:
 	ACaveboundPoisonDome();
 
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Poison Dome")); }
+
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;

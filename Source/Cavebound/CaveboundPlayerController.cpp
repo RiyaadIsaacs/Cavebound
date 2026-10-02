@@ -355,8 +355,9 @@ void ACaveboundPlayerController::OnClickMove()
 
 void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 {
-	if (bOrbitingCamera)
+	if (bOrbitingCamera || bPauseMenuOpen)
 	{
+		HoveredHealthActor = nullptr;
 		return;
 	}
 
@@ -421,6 +422,27 @@ float ACaveboundPlayerController::GetHoveredMaxHealth() const
 	}
 
 	return ICaveboundHoverHealth::Execute_GetHoverMaxHealth(Actor);
+}
+
+FText ACaveboundPlayerController::GetHoveredDisplayName() const
+{
+	AActor* Actor = HoveredHealthActor.Get();
+	if (!Actor || !Actor->Implements<UCaveboundHoverHealth>())
+	{
+		return FText::GetEmpty();
+	}
+
+	return ICaveboundHoverHealth::Execute_GetHoverDisplayName(Actor);
+}
+
+FText ACaveboundPlayerController::GetHoveredHealthText() const
+{
+	const float Health = GetHoveredHealth();
+	const float MaxHealth = GetHoveredMaxHealth();
+	return FText::FromString(FString::Printf(
+		TEXT("%d / %d"),
+		FMath::RoundToInt(Health),
+		FMath::RoundToInt(MaxHealth)));
 }
 
 void ACaveboundPlayerController::StripSlotPlaceKeys()

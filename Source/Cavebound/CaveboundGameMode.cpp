@@ -868,6 +868,13 @@ void ACaveboundGameMode::AddWood(int32 Amount)
 	Wood += Amount;
 }
 
+int32 ACaveboundGameMode::GetWoodPerHarvest() const
+{
+	const int32 Base = Tree ? Tree->GetWoodPerHarvest() : 5;
+	const int32 BonusSteps = FMath::Max(0, RoundIndex) / 2;
+	return Base + BonusSteps * WoodBonusEveryTwoRounds;
+}
+
 bool ACaveboundGameMode::UseWood(int32 Amount)
 {
 	if (bGameOver || Amount <= 0 || Wood < Amount)

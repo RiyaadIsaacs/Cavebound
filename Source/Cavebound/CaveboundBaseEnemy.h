@@ -28,6 +28,7 @@ public:
 	// ICaveboundHoverHealth interface for the HUD to show HP on mouse hover
 	virtual float GetHoverHealth_Implementation() const override { return Health; }
 	virtual float GetHoverMaxHealth_Implementation() const override { return MaxHealth; }
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Enemy")); }
 
 	// Which path to walk and target to attack 
 	void InitAlongPath(USplineComponent* Spline, ACaveboundTree* InTree, float InPreferredLaneOffset = 0.f);

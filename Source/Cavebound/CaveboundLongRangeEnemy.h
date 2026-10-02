@@ -14,4 +14,6 @@ class CAVEBOUND_API ACaveboundLongRangeEnemy : public ACaveboundBaseEnemy
 
 public:
 	ACaveboundLongRangeEnemy();
+
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Long Range")); }
 };
