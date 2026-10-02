@@ -5,6 +5,7 @@
 #include "Components/SplineComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 
 ACaveboundBaseEnemy::ACaveboundBaseEnemy()
@@ -380,19 +381,21 @@ void ACaveboundBaseEnemy::Tick(float DeltaTime)
 
 	if (AActor* Target = ResolveAttackTarget())
 	{
-		if (IsInAttackRangeOf(Target))
+		// Walk to an open spot in range, then attack from there.
+		const FVector Spot = ChooseAttackSpot(Target);
+		FVector ToSpot = Spot - GetActorLocation();
+		ToSpot.Z = 0.f;
+
+		if (ToSpot.Size() > 40.f)
 		{
-			AttackCurrentTarget(DeltaTime);
+			AddActorWorldOffset(ToSpot.GetSafeNormal() * MoveSpeed * SpeedScale * DeltaTime);
+			SetActorRotation(ToSpot.Rotation());
 			return;
 		}
 
-		// Close enough to notice a turret, but still need to walk up to it
-		FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
-		ToTarget.Z = 0.f;
-		if (!ToTarget.IsNearlyZero())
+		if (IsInAttackRangeOf(Target))
 		{
-			AddActorWorldOffset(ToTarget.GetSafeNormal() * MoveSpeed * SpeedScale * DeltaTime);
-			SetActorRotation(ToTarget.Rotation());
+			AttackCurrentTarget(DeltaTime);
 		}
 		return;
 	}
@@ -423,6 +426,21 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 				AddActorWorldOffset(ToTree.GetSafeNormal() * MoveSpeed * SpeedScale * DeltaTime);
 			}
 		}
+		return;
+	}
+
+	const FVector PathPointNow = Spline->GetLocationAtDistanceAlongSpline(
+		DistanceAlongSpline,
+		ESplineCoordinateSpace::World);
+	const FVector PathSpot = PathPointNow + FVector(0.f, 0.f, PathHeightOffset);
+
+	// Came back from a fight off the path. Walk to the path instead of jumping there.
+	FVector ToPath = PathSpot - GetActorLocation();
+	ToPath.Z = 0.f;
+	if (ToPath.Size() > MaxLaneOffset + 80.f)
+	{
+		AddActorWorldOffset(ToPath.GetSafeNormal() * MoveSpeed * GetMoveSpeedScale() * DeltaTime);
+		SetActorRotation(ToPath.Rotation());
 		return;
 	}
 
@@ -487,8 +505,12 @@ void ACaveboundBaseEnemy::AttackCurrentTarget(float DeltaTime)
 
 	AttackTime = 0.f;
 
-	// Play the punch before the damage is applied.
+	// Play the swing. Melee hits damage now. A ranged hit spawns its own projectile.
 	OnMeleeStrike();
+	if (!AttackAppliesDamageNow())
+	{
+		return;
+	}
 
 	if (ACaveboundTurret* Turret = Cast<ACaveboundTurret>(Target))
 	{
@@ -500,4 +522,79 @@ void ACaveboundBaseEnemy::AttackCurrentTarget(float DeltaTime)
 	{
 		TreeTarget->ApplyDamage(AttackDamage);
 	}
+}
+
+bool ACaveboundBaseEnemy::IsSpotBlockedByEnemy(const FVector& Spot) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	// Another living enemy is already using this place.
+	for (TActorIterator<ACaveboundBaseEnemy> It(World); It; ++It)
+	{
+		const ACaveboundBaseEnemy* Other = *It;
+		if (!Other || Other == this || Other->IsDead())
+		{
+			continue;
+		}
+
+		if (FVector::Dist2D(Spot, Other->GetActorLocation()) < StandClearDistance)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+FVector ACaveboundBaseEnemy::ChooseAttackSpot(const AActor* Target) const
+{
+	if (!Target)
+	{
+		return GetActorLocation();
+	}
+
+	// Already in range and not standing on someone.
+	if (IsInAttackRangeOf(Target) && !IsSpotBlockedByEnemy(GetActorLocation()))
+	{
+		return GetActorLocation();
+	}
+
+	const FVector TargetLocation = Target->GetActorLocation();
+	const float StandDistance = FMath::Max(80.f, AttackRange * 0.7f);
+	const int32 SlotCount = 8;
+	const int32 FirstSlot = GetUniqueID() % SlotCount;
+
+	for (int32 Step = 0; Step < SlotCount; ++Step)
+	{
+		const int32 Slot = (FirstSlot + Step) % SlotCount;
+		const float Angle = (2.f * PI * Slot) / SlotCount;
+		FVector Spot = TargetLocation + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * StandDistance;
+		Spot.Z = GetActorLocation().Z;
+
+		if (!IsSpotBlockedByEnemy(Spot))
+		{
+			return Spot;
+		}
+	}
+
+	// Every seat is taken. Stay here if we can already hit, otherwise walk toward the target and wait.
+	if (IsInAttackRangeOf(Target))
+	{
+		return GetActorLocation();
+	}
+
+	FVector TowardTarget = TargetLocation - GetActorLocation();
+	TowardTarget.Z = 0.f;
+	if (TowardTarget.IsNearlyZero())
+	{
+		return GetActorLocation();
+	}
+
+	FVector Spot = TargetLocation - TowardTarget.GetSafeNormal() * StandDistance;
+	Spot.Z = GetActorLocation().Z;
+	return Spot;
 }

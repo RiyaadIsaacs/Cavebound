@@ -8,10 +8,10 @@ ACaveboundArrow::ACaveboundArrow()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	// A small cylinder. It only overlaps things. It does not bump the world.
+	// Archer arrow. Tick aims the long axis along the shot.
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	SetRootComponent(VisualMesh);
-	VisualMesh->SetRelativeScale3D(FVector(0.15f, 0.15f, 0.6f));
+	VisualMesh->SetRelativeScale3D(FVector(0.35f));
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
@@ -19,11 +19,11 @@ ACaveboundArrow::ACaveboundArrow()
 	VisualMesh->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	VisualMesh->SetGenerateOverlapEvents(true);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> cylinderMesh(
-		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (cylinderMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> arrowMesh(
+		TEXT("/Game/Assets/Models/Towers/SM_ArcherShell.SM_ArcherShell"));
+	if (arrowMesh.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(cylinderMesh.Object);
+		VisualMesh->SetStaticMesh(arrowMesh.Object);
 	}
 }
 
@@ -86,10 +86,10 @@ void ACaveboundArrow::Tick(float DeltaTime)
 		return;
 	}
 
-	// Step toward the enemy and turn to face them.
+	// Step toward the enemy. The mesh's long axis points up, so aim that up-axis along the shot.
 	const FVector stepTowardEnemy = directionToEnemy.GetSafeNormal() * Speed * DeltaTime;
 	AddActorWorldOffset(stepTowardEnemy, true);
-	SetActorRotation(directionToEnemy.Rotation());
+	SetActorRotation(FRotationMatrix::MakeFromZ(directionToEnemy.GetSafeNormal()).Rotator());
 }
 
 void ACaveboundArrow::OnMeshBeginOverlap(

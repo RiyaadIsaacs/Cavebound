@@ -10,6 +10,7 @@
 #include "CaveboundTurret.h"
 #include "Components/SplineComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 
@@ -656,6 +657,31 @@ void ACaveboundGameMode::ClearRoundTimers()
 	}
 }
 
+bool ACaveboundGameMode::IsSpawnPointClear(const FVector& SpawnPoint) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return true;
+	}
+
+	for (TActorIterator<ACaveboundBaseEnemy> It(World); It; ++It)
+	{
+		const ACaveboundBaseEnemy* Other = *It;
+		if (!Other || Other->IsDead())
+		{
+			continue;
+		}
+
+		if (FVector::Dist2D(SpawnPoint, Other->GetActorLocation()) < 180.f)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
 void ACaveboundGameMode::SpawnEnemy()
 {
 	if (bGameOver || RoundState != ECaveboundRoundState::Combat)
@@ -744,6 +770,12 @@ void ACaveboundGameMode::SpawnEnemy()
 			PathCount,
 			EnemiesSpawnedThisRound,
 			EnemiesToSpawnThisRound);
+		return;
+	}
+
+	// The entrance is full. Leave this enemy for the next timer tick.
+	if (!IsSpawnPointClear(SpawnLoc))
+	{
 		return;
 	}
 

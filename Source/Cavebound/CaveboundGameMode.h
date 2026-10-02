@@ -141,6 +141,7 @@ protected:
 	int32 CountLivingTurrets() const;
 	TSubclassOf<ACaveboundBaseEnemy> PickEnemyClassForSpawn() const;
 	float GetCurrentSpawnInterval() const;
+	bool IsSpawnPointClear(const FVector& SpawnPoint) const;
 
 	// Cells added to GridSizeX/Y each cleared wave.
 	UPROPERTY(EditAnywhere, Category = "BuildSlots")

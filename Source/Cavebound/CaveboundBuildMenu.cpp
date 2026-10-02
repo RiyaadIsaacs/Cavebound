@@ -121,8 +121,25 @@ void UCaveboundBuildMenu::OpenForSlot(AActor* BuildSlot)
 	{
 		AddChoice(TEXT("Turret"), TurretClass);
 	}
-	AddChoice(TEXT("Sentry"), ACaveboundSentry::StaticClass());
-	AddChoice(TEXT("Cannon"), ACaveboundCannon::StaticClass());
+
+	// Blueprint versions hold the fire-point arrows placed in the editor.
+	if (UClass* SentryClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_CaveboundSentry.BP_CaveboundSentry_C")))
+	{
+		AddChoice(TEXT("Sentry"), SentryClass);
+	}
+	else
+	{
+		AddChoice(TEXT("Sentry"), ACaveboundSentry::StaticClass());
+	}
+
+	if (UClass* CannonClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_CaveboundCannon.BP_CaveboundCannon_C")))
+	{
+		AddChoice(TEXT("Cannon"), CannonClass);
+	}
+	else
+	{
+		AddChoice(TEXT("Cannon"), ACaveboundCannon::StaticClass());
+	}
 	AddChoice(TEXT("Poison Dome"), ACaveboundPoisonDome::StaticClass());
 	AddChoice(TEXT("Snare"), ACaveboundSnare::StaticClass());
 }

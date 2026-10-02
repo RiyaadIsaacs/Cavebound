@@ -1,16 +1,20 @@
 #include "CaveboundBruteEnemy.h"
 #include "CaveboundTree.h"
+#include "Engine/SkeletalMesh.h"
 #include "CaveboundTurret.h"
 #include "UObject/ConstructorHelpers.h"
 
 ACaveboundBruteEnemy::ACaveboundBruteEnemy()
 {
-	VisualMesh->SetRelativeScale3D(FVector(1.1f, 1.1f, 0.85f));
+	// Same walk, hit, punch, and death as the minion. Only the body mesh changes.
+	VisualMesh->SetRelativeScale3D(FVector(1.f, 1.f, 1.f));
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (CubeMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> warriorMesh(
+		TEXT("/Game/Characters/Skeleton/Skeleton_Warrior.Skeleton_Warrior"));
+	if (warriorMesh.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(CubeMesh.Object);
+		BodyMesh = warriorMesh.Object;
+		Body->SetSkeletalMeshAsset(BodyMesh);
 	}
 
 	MinDifficultyToSpawn = 40;
@@ -21,7 +25,7 @@ ACaveboundBruteEnemy::ACaveboundBruteEnemy()
 	AttackRange = 320.f;
 	AttackInterval = 1.35f;
 	TurretDetectRange = 1100.f;
-	PathHeightOffset = 55.f;
+	PathHeightOffset = 0.f;
 	HitFlashColor = FLinearColor(0.55f, 0.15f, 0.05f);
 }
 

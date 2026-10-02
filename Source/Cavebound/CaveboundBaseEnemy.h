@@ -73,6 +73,13 @@ protected:
 	// Called once on each successful melee swing, before damage is applied
 	virtual void OnMeleeStrike() {}
 
+	// Melee hits apply damage right away. The mage overrides this and fires a bolt instead.
+	virtual bool AttackAppliesDamageNow() const { return true; }
+
+	// A standing place inside attack range that no other enemy is using.
+	FVector ChooseAttackSpot(const AActor* Target) const;
+	bool IsSpotBlockedByEnemy(const FVector& Spot) const;
+
 	// Destroy() and maybe other VFX / sounds / particles
 	virtual void OnDeath();
 
@@ -119,6 +126,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AttackDamage = 8.f;
+
+	// How far this enemy keeps from the others while attacking.
+	UPROPERTY(EditAnywhere, Category = "Combat", meta = (ClampMin = "0"))
+	float StandClearDistance = 140.f;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float HitFlashDuration = 0.15f;

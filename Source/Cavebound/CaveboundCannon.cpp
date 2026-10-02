@@ -1,16 +1,24 @@
 #include "CaveboundCannon.h"
+#include "CaveboundCannonShell.h"
 #include "UObject/ConstructorHelpers.h"
 
 ACaveboundCannon::ACaveboundCannon()
 {
-	// Bigger sphere so the cannon reads as the heavy defender.
-	VisualMesh->SetRelativeScale3D(FVector(1.35f, 1.35f, 1.35f));
+	// Cannon tower model. Same scale as the archer tower so it fits a build slot.
+	VisualMesh->SetRelativeScale3D(FVector(0.2f));
+	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
+	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> sphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	if (sphereMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(
+		TEXT("/Game/Assets/Models/Towers/SM_CannonTower_LVL4.SM_CannonTower_LVL4"));
+	if (towerMesh.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(sphereMesh.Object);
+		VisualMesh->SetStaticMesh(towerMesh.Object);
 	}
+
+	// Cannonballs instead of arrows.
+	ProjectileClass = ACaveboundCannonShell::StaticClass();
+	FirePointOffset = FVector(70.f, 0.f, 220.f);
 
 	// Costs the most, shoots slowly, and hits hard from far away.
 	Cost = 280;
