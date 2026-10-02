@@ -73,6 +73,12 @@ void ACaveboundPlayerController::BeginPlay()
 	}
 
 	EnsureClickMoveInput();
+
+	if (ACaveboundGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACaveboundGameMode>() : nullptr)
+	{
+		GameMode->EnsureGameplayReady();
+	}
+
 	ShowHUD();
 
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =

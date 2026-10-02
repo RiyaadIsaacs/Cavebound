@@ -457,6 +457,12 @@ void ACaveboundBaseEnemy::AttackCurrentTarget(float DeltaTime)
 		SetActorRotation(ToTarget.Rotation());
 	}
 
+	// A hit animation says no, so do not start a new swing yet.
+	if (!CanAttack())
+	{
+		return;
+	}
+
 	// Accumulate time until AttackInterval, then deal one hit
 	AttackTime += DeltaTime;
 	if (AttackTime < AttackInterval)
@@ -465,6 +471,9 @@ void ACaveboundBaseEnemy::AttackCurrentTarget(float DeltaTime)
 	}
 
 	AttackTime = 0.f;
+
+	// Play the punch before the damage is applied.
+	OnMeleeStrike();
 
 	if (ACaveboundTurret* Turret = Cast<ACaveboundTurret>(Target))
 	{

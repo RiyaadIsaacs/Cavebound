@@ -58,7 +58,15 @@ public:
 	bool IsGameOver() const { return bGameOver; }
 
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
-	ACaveboundTree* GetTree() const { return Tree; }
+	ACaveboundTree* GetTree() const;
+
+	// Safe for HUD progress bars when the tree is not ready yet (returns 1 = full).
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	float GetTreeHealthPercent() const;
+
+	// Spawns/finds the tree before HUD BeginPlay (GameMode StartPlay can run later).
+	UFUNCTION(BlueprintCallable, Category = "Cavebound")
+	void EnsureGameplayReady();
 
 	// Press Start Wave on the HUD to begin a round
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
@@ -101,6 +109,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	int32 GetRoundIndex() const { return RoundIndex; }
 
+	// Build pads on the current terrain without regenerating path
+	// EndRound calls this when enabled
+	UFUNCTION(BlueprintCallable, Category = "Cavebound")
+	int32 ExpandBuildSlots();
+
 protected:
 	// Spawn the magical wood tree if the level does not already have one
 	void EnsureTree();
@@ -110,14 +123,47 @@ protected:
 	void SpawnEnemy();
 	void BeginCombatPhase();
 	void EndRound();
+	void RequestEndRound();
+	void ExpandBuildSlotsNextTick();
 	void ClearRoundTimers();
 
-	// Amount of wood the player has
 	void PrepareWaveBudget();
 	void UpdateDifficultyAfterRound();
 	int32 CountLivingTurrets() const;
 	TSubclassOf<ACaveboundBaseEnemy> PickEnemyClassForSpawn() const;
 	float GetCurrentSpawnInterval() const;
+
+	// Cells added to GridSizeX/Y each cleared wave (grows the visible map).
+	UPROPERTY(EditAnywhere, Category = "BuildSlots")
+	int32 BuildSlotExpandCells = 2;
+
+	// Multiplies MinSlotSpacing each expansion (0.85 => pads may sit closer)
+	UPROPERTY(EditAnywhere, Category = "BuildSlots")
+	float BuildSlotSpacingMultiplier = 0.85f;
+
+	// Never let MinSlotSpacing fall below this (cm)
+	UPROPERTY(EditAnywhere, Category = "BuildSlots")
+	float BuildSlotSpacingFloor = 200.f;
+
+	// Cap so GridSize cannot grow without limit across many rounds
+	UPROPERTY(EditAnywhere, Category = "BuildSlots")
+	int32 BuildSlotMaxGridSize = 48;
+
+	// Extra distance beyond PathWidth/2 when placing pads beside paths
+	UPROPERTY(EditAnywhere, Category = "BuildSlots")
+	float BuildSlotPathSidePadding = 80.f;
+
+	// Max brand-new pads created in one expansion (per cleared wave)
+	UPROPERTY(EditAnywhere, Category = "BuildSlots")
+	int32 BuildSlotMaxNewPerExpand = 2;
+
+	// Only expand once DifficultyScore reaches this (0 = every cleared round)
+	UPROPERTY(EditAnywhere, Category = "BuildSlots")
+	int32 BuildSlotExpandMinDifficulty = 0;
+
+	// When true, EndRound auto-expands after UpdateDifficultyAfterRound
+	UPROPERTY(EditAnywhere, Category = "BuildSlots")
+	bool bExpandBuildSlotsAfterRound = true;
 
 	UPROPERTY(VisibleAnywhere, Category = "Resources")
 	int32 Wood = 0;
@@ -182,7 +228,11 @@ protected:
 
 	bool bHasShownRoundNotStartedMessage = false;
 	bool bPendingRoundNotStartedPopup = false;
+	// Prevents EndRound running re-entrantly from the last enemy's OnDeath stack
+	bool bEndRoundPending = false;
 
 	FTimerHandle CollectionTimer;
 	FTimerHandle EnemySpawnTimer;
+	FTimerHandle EndRoundTimer;
+	FTimerHandle ExpandSlotsTimer;
 };

@@ -50,13 +50,20 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float Speed = 1200.f;
 
+	// The shot deletes itself after this many seconds.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float MaxLifetime = 4.f;
 
+	// Close enough to count as a hit even before the overlap fires.
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float HitRadius = 50.f;
 
+	// The enemy this shot is chasing.
 	TWeakObjectPtr<ACaveboundBaseEnemy> Target;
+
+	// How long this shot has been in the air.
 	float Lifetime = 0.f;
+
+	// Stops the shot from damaging more than one enemy.
 	bool bHasHit = false;
 };

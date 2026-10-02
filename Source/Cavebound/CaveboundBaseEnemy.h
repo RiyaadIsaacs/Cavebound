@@ -64,6 +64,14 @@ protected:
 	virtual void MoveAlongPath(float DeltaTime);
 	// Damage the current turret or tree on a timer
 	virtual void AttackCurrentTarget(float DeltaTime);
+
+	// False while a hit reaction should stop this enemy from swinging
+	virtual bool CanAttack() const { return true; }
+
+	// Called once on each successful melee swing, before damage is applied
+	virtual void OnMeleeStrike() {}
+
+	// Destroy() and maybe other VFX / sounds / particles
 	virtual void OnDeath();
 
 	// Prefer turrets in detect range, else the tree when in attack range. Brute overrides.

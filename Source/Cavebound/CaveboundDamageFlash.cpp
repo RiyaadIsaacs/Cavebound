@@ -1,4 +1,5 @@
 #include "CaveboundDamageFlash.h"
+#include "Components/MeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -93,4 +94,41 @@ void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStat
 	});
 
 	World->GetTimerManager().SetTimer(TimerHandle, RestoreDelegate, Duration, false);
+}
+
+void FCaveboundDamageFlash::FlashComponent(UObject* WorldContext, UMeshComponent* Mesh, FTimerHandle& TimerHandle, FLinearColor FlashColor, float Duration)
+{
+	// Need a world and a mesh, and the flash has to last longer than nothing.
+	UWorld* world = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!world || !IsValid(Mesh) || Duration <= 0.f)
+	{
+		return;
+	}
+
+	// A new hit restarts the flash instead of stacking timers.
+	world->GetTimerManager().ClearTimer(TimerHandle);
+
+	UMaterialInstanceDynamic* flashMaterial = GetOrCreateRedMID(WorldContext);
+	if (!flashMaterial)
+	{
+		return;
+	}
+
+	// Paint the overlay and put it on the mesh.
+	flashMaterial->SetVectorParameterValue(FName(TEXT("Color")), FlashColor);
+	Mesh->SetOverlayMaterial(flashMaterial);
+
+	// Take the color back off after the flash time is over.
+	AActor* ownerActor = Cast<AActor>(WorldContext);
+	TWeakObjectPtr<UMeshComponent> meshToFlash = Mesh;
+	FTimerDelegate clearFlashLater;
+	clearFlashLater.BindWeakLambda(ownerActor, [meshToFlash]()
+	{
+		if (UMeshComponent* hitMesh = meshToFlash.Get())
+		{
+			hitMesh->SetOverlayMaterial(nullptr);
+		}
+	});
+
+	world->GetTimerManager().SetTimer(TimerHandle, clearFlashLater, Duration, false);
 }
