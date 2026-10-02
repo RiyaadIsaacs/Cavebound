@@ -5,7 +5,7 @@
 #include "CaveboundSentry.generated.h"
 
 /**
- * Cheap short-range defender. Fires quickly for low damage.
+ * Cheap short-range defender
  */
 UCLASS(Blueprintable)
 class CAVEBOUND_API ACaveboundSentry : public ACaveboundTurret

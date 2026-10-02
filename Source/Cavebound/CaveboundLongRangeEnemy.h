@@ -1,17 +1,23 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CaveboundBaseEnemy.h"
+#include "CaveboundEnemy.h"
 #include "CaveboundLongRangeEnemy.generated.h"
 
 /**
  * Artillery enemy: stops farther out and attacks with a long AttackRange.
  */
 UCLASS()
-class CAVEBOUND_API ACaveboundLongRangeEnemy : public ACaveboundBaseEnemy
+class CAVEBOUND_API ACaveboundLongRangeEnemy : public ACaveboundEnemy
 {
 	GENERATED_BODY()
 
 public:
 	ACaveboundLongRangeEnemy();
+
+protected:
+	virtual bool AttackAppliesDamageNow() const override;
+	virtual void OnMeleeStrike() override;
+
+	void FireBolt(AActor* Target);
 };

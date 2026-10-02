@@ -6,6 +6,7 @@
 #include "CaveboundHoverHealth.h"
 #include "CaveboundTurret.generated.h"
 
+class UArrowComponent;
 class USceneComponent;
 class UStaticMeshComponent;
 class ACaveboundBaseEnemy;
@@ -47,7 +48,11 @@ protected:
 	virtual void OnDestroyedByDamage();
 
 	ACaveboundBaseEnemy* FindNearestEnemy() const;
-	void TryFireAtNearestEnemy();
+	void RememberFirePoint();
+	void GetShotStart(FVector& shotLocation, FVector& shotForward) const;
+	float GetYawErrorToEnemy(const ACaveboundBaseEnemy* enemy) const;
+	void TurnTowardEnemy(const ACaveboundBaseEnemy* enemy, float DeltaTime);
+	bool TryFireAtEnemy(ACaveboundBaseEnemy* closestEnemy);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turret")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -78,9 +83,20 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float FireInterval = 1.0f;
 
-	// Where the shot comes out, measured from the turret.
+	// Used when the blueprint has no fire-point arrow.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (MakeEditWidget = true))
-	FVector FirePointOffset = FVector(80.f, 0.f, 100.f);
+	FVector FirePointOffset = FVector(40.f, 0.f, 220.f);
+
+	// Degrees per second. Fast enough to snap around, slow enough that the tower is seen turning.
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float TurnSpeed = 720.f;
+
+	// A shot only leaves when the enemy is inside this many degrees left or right of the fire point.
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float AimHalfAngle = 45.f;
+
+	// The arrow placed on a blueprint. Shots come out of this.
+	TObjectPtr<UArrowComponent> FirePoint;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float ProjectileDamage = 10.f;

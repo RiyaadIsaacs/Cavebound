@@ -63,17 +63,17 @@ ACaveboundPoisonDome::ACaveboundPoisonDome()
 	// The dome does not shoot. It slows and poisons enemies that walk into it.
 	bAutoFire = false;
 
-	// The engine cone points up. Flip it so the tip sits on the ground and the wide end is at the top.
-	// Old body was about 160 tall. This one is 400 tall.
-	const float bodyHeight = 400.f;
-	VisualMesh->SetRelativeScale3D(FVector(1.2f, 1.2f, bodyHeight / 100.f));
-	VisualMesh->SetRelativeRotation(FRotator(180.f, 0.f, 0.f));
-	VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, bodyHeight * 0.5f));
+	// Poison tower in place of the old cone. The file is about 15 meters tall, so scale it down.
+	// Pivot is already on the ground, so it does not need a flip or a height offset.
+	VisualMesh->SetRelativeScale3D(FVector(0.2f));
+	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
+	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> coneMesh(TEXT("/Engine/BasicShapes/Cone.Cone"));
-	if (coneMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(
+		TEXT("/Game/Assets/Models/Towers/SM_PoisonTower_LVL4.SM_PoisonTower_LVL4"));
+	if (towerMesh.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(coneMesh.Object);
+		VisualMesh->SetStaticMesh(towerMesh.Object);
 	}
 
 	// See-through green dome. No collision, so enemies can walk through it.
@@ -111,7 +111,7 @@ void ACaveboundPoisonDome::BeginPlay()
 
 void ACaveboundPoisonDome::PlayDamageFlash()
 {
-	// Only the cone flashes. The green dome stays as it is.
+	// Only the tower flashes. The green dome stays as it is.
 	TArray<UStaticMeshComponent*> coneOnly;
 	if (VisualMesh)
 	{
