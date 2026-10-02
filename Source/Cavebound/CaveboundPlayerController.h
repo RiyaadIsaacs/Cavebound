@@ -42,7 +42,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound|Pause")
 	bool IsPauseMenuOpen() const { return bPauseMenuOpen; }
 
-	// Escape / Tab 
+	// Escape / Tab
 	UFUNCTION(BlueprintCallable, Category = "Cavebound|Pause")
 	void TogglePauseMenu();
 
@@ -67,24 +67,27 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupInputComponent() override;
 	virtual void PlayerTick(float DeltaTime) override;
 
-	// Collection of action mappings
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> DefaultMappingContext;
 
-	// The "click to move" action
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> ClickMoveAction;
 
-	void EnsureClickMoveInput();
 	void ShowHUD();
 	void ShowPauseMenu();
 	void HidePauseMenu();
 	void ApplyGameplayInputMode();
+	void ApplyMenuInputMode();
 	void ApplyPauseInputMode();
+	void ConfigureHudClickThrough();
+	void ClearEnhancedClickMappings();
 	void UpdateHoveredHealthTarget();
+	bool IsPointerOverInteractiveUI() const;
+	bool IsMouseButtonHeld(const FKey& Button) const;
 
 	void HandleBuildKey();
 	void StripSlotPlaceKeys();
@@ -137,6 +140,8 @@ protected:
 
 	bool bOrbitingCamera = false;
 	bool bPauseMenuOpen = false;
+	bool bLeftMouseWasDown = false;
+	bool bRightMouseWasDown = false;
 	float LastOrbitMouseX = 0.f;
 	float LastOrbitMouseY = 0.f;
 };

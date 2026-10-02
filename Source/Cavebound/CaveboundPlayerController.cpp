@@ -7,87 +7,69 @@
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
 #include "Components/InputComponent.h"
-#include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/Widget.h"
+#include "Components/Button.h"
+#include "Components/CheckBox.h"
+#include "Components/Slider.h"
+#include "Components/EditableText.h"
+#include "Components/EditableTextBox.h"
 #include "Engine/GameViewportClient.h"
-#include "Materials/MaterialInterface.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
-#include "InputAction.h"
-#include "InputMappingContext.h"
+#include "Framework/Application/SlateApplication.h"
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Materials/MaterialInterface.h"
+
+#if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <windows.h>
+#include "Windows/HideWindowsPlatformTypes.h"
+#endif
 
 ACaveboundPlayerController::ACaveboundPlayerController()
 {
 	bShowMouseCursor = true;
-	bEnableClickEvents = true;
-	bEnableMouseOverEvents = true;
+	bEnableClickEvents = false;
+	bEnableMouseOverEvents = false;
 	DefaultMouseCursor = EMouseCursor::Default;
-}
-
-void ACaveboundPlayerController::EnsureClickMoveInput()
-{
-	if (!ClickMoveAction)
-	{
-		ClickMoveAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/IA_ClickMove.IA_ClickMove"));
-	}
-
-	if (!DefaultMappingContext)
-	{
-		DefaultMappingContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Player.IMC_Player"));
-	}
-
-	if (!ClickMoveAction)
-	{
-		ClickMoveAction = NewObject<UInputAction>(this, TEXT("IA_ClickMove"));
-		ClickMoveAction->ValueType = EInputActionValueType::Boolean;
-	}
-
-	if (!DefaultMappingContext)
-	{
-		DefaultMappingContext = NewObject<UInputMappingContext>(this, TEXT("IMC_Player"));
-	}
-
-	// Content IMC can exist but have no keys (asset creation missed the LMB bind).
-	// Always make sure left mouse fires ClickMoveAction.
-	if (DefaultMappingContext && ClickMoveAction && DefaultMappingContext->GetMappings().Num() == 0)
-	{
-		DefaultMappingContext->MapKey(ClickMoveAction, EKeys::LeftMouseButton);
-	}
 }
 
 void ACaveboundPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	ShowHUD();
+	ClearEnhancedClickMappings();
 	ApplyGameplayInputMode();
 
-	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
-	{
-		Viewport->SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
-		Viewport->SetHideCursorDuringCapture(false);
-	}
-
-	EnsureClickMoveInput();
+	bLeftMouseWasDown = IsMouseButtonHeld(EKeys::LeftMouseButton);
+	bRightMouseWasDown = IsMouseButtonHeld(EKeys::RightMouseButton);
 
 	if (ACaveboundGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACaveboundGameMode>() : nullptr)
 	{
 		GameMode->EnsureGameplayReady();
 	}
+}
 
-	ShowHUD();
+void ACaveboundPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ClearEnhancedClickMappings();
+	Super::EndPlay(EndPlayReason);
+}
 
+void ACaveboundPlayerController::ClearEnhancedClickMappings()
+{
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 	{
-		if (DefaultMappingContext)
-		{
-			Subsystem->AddMappingContext(DefaultMappingContext, 0);
-		}
+		Subsystem->ClearAllMappings();
 	}
 }
 
@@ -102,7 +84,44 @@ void ACaveboundPlayerController::ShowHUD()
 	if (HUDWidget)
 	{
 		HUDWidget->AddToViewport(0);
+		ConfigureHudClickThrough();
 	}
+}
+
+void ACaveboundPlayerController::ConfigureHudClickThrough()
+{
+	if (!HUDWidget)
+	{
+		return;
+	}
+
+	HUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (!HUDWidget->WidgetTree)
+	{
+		return;
+	}
+
+	HUDWidget->WidgetTree->ForEachWidget([](UWidget* Widget)
+	{
+		if (!Widget)
+		{
+			return;
+		}
+
+		if (Widget->IsA<UButton>()
+			|| Widget->IsA<UCheckBox>()
+			|| Widget->IsA<USlider>()
+			|| Widget->IsA<UEditableText>()
+			|| Widget->IsA<UEditableTextBox>())
+		{
+			return;
+		}
+
+		if (Widget->GetVisibility() == ESlateVisibility::Visible)
+		{
+			Widget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		}
+	});
 }
 
 void ACaveboundPlayerController::ApplyGameplayInputMode()
@@ -112,6 +131,31 @@ void ACaveboundPlayerController::ApplyGameplayInputMode()
 	InputMode.SetHideCursorDuringCapture(false);
 	SetInputMode(InputMode);
 	bShowMouseCursor = true;
+
+	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+	{
+		Viewport->SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
+		Viewport->SetHideCursorDuringCapture(false);
+		Viewport->SetMouseLockMode(EMouseLockMode::DoNotLock);
+	}
+
+	ClearEnhancedClickMappings();
+	ConfigureHudClickThrough();
+}
+
+void ACaveboundPlayerController::ApplyMenuInputMode()
+{
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InputMode);
+	bShowMouseCursor = true;
+
+	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+	{
+		Viewport->SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
+		Viewport->SetHideCursorDuringCapture(false);
+	}
 }
 
 void ACaveboundPlayerController::ApplyPauseInputMode()
@@ -207,24 +251,8 @@ void ACaveboundPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	EnsureClickMoveInput();
-
-	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
-	{
-		if (ClickMoveAction)
-		{
-			EnhancedInput->BindAction(
-				ClickMoveAction,
-				ETriggerEvent::Started,
-				this,
-				&ACaveboundPlayerController::OnClickMove);
-		}
-	}
-
 	if (InputComponent)
 	{
-		InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ACaveboundPlayerController::OnClickMove);
-
 		// bExecuteWhenPaused so Escape/Tab can resume while the world is paused
 		FInputKeyBinding& EscapeBinding = InputComponent->BindKey(
 			EKeys::Escape,
@@ -268,31 +296,42 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
 
-	// The slot blueprint still has an instant-place key. Drop it so B only opens the picker.
 	StripSlotPlaceKeys();
 	UpdateBuildSlotPresentation();
 
 	if (bPauseMenuOpen)
 	{
+		bLeftMouseWasDown = IsMouseButtonHeld(EKeys::LeftMouseButton);
+		bRightMouseWasDown = IsMouseButtonHeld(EKeys::RightMouseButton);
 		return;
 	}
 
-	// Backup if Enhanced Input assets have no mapping: raw left-click still moves.
-	if (WasInputKeyJustPressed(EKeys::LeftMouseButton))
+	const bool bLMB = IsMouseButtonHeld(EKeys::LeftMouseButton);
+	const bool bRMB = IsMouseButtonHeld(EKeys::RightMouseButton);
+
+	float MouseX = 0.f;
+	float MouseY = 0.f;
+	const bool bMouseInViewport = GetMousePosition(MouseX, MouseY);
+
+	if (bLMB && !bLeftMouseWasDown && bMouseInViewport)
 	{
 		OnClickMove();
 	}
+	bLeftMouseWasDown = bLMB;
 
-	if (IsInputKeyDown(EKeys::RightMouseButton))
+	if (bRMB && bMouseInViewport)
 	{
-		float MouseX = 0.f;
-		float MouseY = 0.f;
-		if (GetMousePosition(MouseX, MouseY))
+		if (!bRightMouseWasDown)
 		{
-			if (bOrbitingCamera)
+			LastOrbitMouseX = MouseX;
+			LastOrbitMouseY = MouseY;
+		}
+		else
+		{
+			const float DeltaX = MouseX - LastOrbitMouseX;
+			const float DeltaY = MouseY - LastOrbitMouseY;
+			if (!FMath::IsNearlyZero(DeltaX) || !FMath::IsNearlyZero(DeltaY))
 			{
-				const float DeltaX = MouseX - LastOrbitMouseX;
-				const float DeltaY = MouseY - LastOrbitMouseY;
 				if (ACaveboundCharacter* PlayerCharacter = Cast<ACaveboundCharacter>(GetPawn()))
 				{
 					PlayerCharacter->OrbitCamera(DeltaX, DeltaY);
@@ -300,20 +339,89 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 			}
 			LastOrbitMouseX = MouseX;
 			LastOrbitMouseY = MouseY;
-			bOrbitingCamera = true;
 		}
+		bOrbitingCamera = true;
 	}
 	else
 	{
 		bOrbitingCamera = false;
 	}
+	bRightMouseWasDown = bRMB;
 
 	UpdateHoveredHealthTarget();
 }
 
-void ACaveboundPlayerController::OnClickMove()
+bool ACaveboundPlayerController::IsMouseButtonHeld(const FKey& Button) const
+{
+#if PLATFORM_WINDOWS
+	if (Button == EKeys::LeftMouseButton)
+	{
+		return (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+	}
+	if (Button == EKeys::RightMouseButton)
+	{
+		return (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+	}
+#endif
+
+	if (FSlateApplication::IsInitialized())
+	{
+		return FSlateApplication::Get().GetPressedMouseButtons().Contains(Button);
+	}
+
+	return IsInputKeyDown(Button);
+}
+
+bool ACaveboundPlayerController::IsPointerOverInteractiveUI() const
 {
 	if (bPauseMenuOpen)
+	{
+		return true;
+	}
+
+	auto HasHoveredInteractiveChild = [](const UUserWidget* Root) -> bool
+	{
+		if (!Root || !Root->WidgetTree)
+		{
+			return false;
+		}
+
+		bool bFound = false;
+		Root->WidgetTree->ForEachWidget([&bFound](UWidget* Widget)
+		{
+			if (bFound || !Widget || !Widget->IsHovered())
+			{
+				return;
+			}
+
+			if (Widget->IsA<UButton>()
+				|| Widget->IsA<UCheckBox>()
+				|| Widget->IsA<USlider>()
+				|| Widget->IsA<UEditableText>()
+				|| Widget->IsA<UEditableTextBox>())
+			{
+				bFound = true;
+			}
+		});
+		return bFound;
+	};
+
+	if (HasHoveredInteractiveChild(HUDWidget))
+	{
+		return true;
+	}
+
+	if (BuildMenu && BuildMenu->IsInViewport() && HasHoveredInteractiveChild(BuildMenu))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+void ACaveboundPlayerController::OnClickMove()
+{
+	if (bPauseMenuOpen || IsPointerOverInteractiveUI())
 	{
 		return;
 	}
@@ -532,6 +640,8 @@ void ACaveboundPlayerController::OpenBuildMenu(AActor* Slot)
 		BuildMenu->SetHoverScreenPosition(ScreenPosition);
 		BuildMenu->SetHoverVisible(true);
 	}
+
+	ApplyMenuInputMode();
 }
 
 void ACaveboundPlayerController::CloseBuildMenu()
@@ -541,6 +651,8 @@ void ACaveboundPlayerController::CloseBuildMenu()
 	{
 		BuildMenu->RemoveFromParent();
 	}
+
+	ApplyGameplayInputMode();
 }
 
 void ACaveboundPlayerController::CollectInteractableSlots(TArray<AActor*>& OutSlots, AActor*& OutClosest) const
