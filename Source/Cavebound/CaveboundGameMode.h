@@ -86,6 +86,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetCollectionTimeRemaining() const;
 
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetCollectionDuration() const { return CollectionDuration; }
 
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
