@@ -5,6 +5,7 @@
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundLongRangeEnemy.h"
 #include "CaveboundPlayerController.h"
+#include "CaveboundTerrainExpansion.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
 #include "Components/SplineComponent.h"
@@ -42,9 +43,43 @@ void ACaveboundGameMode::InitGame(const FString& MapName, const FString& Options
 void ACaveboundGameMode::StartPlay()
 {
 	Super::StartPlay();
-	EnsureTree();
-	CollectPathSplines();
+	EnsureGameplayReady();
 	RoundState = ECaveboundRoundState::Idle;
+}
+
+void ACaveboundGameMode::EnsureGameplayReady()
+{
+	EnsureTree();
+	if (PathSplines.Num() == 0)
+	{
+		CollectPathSplines();
+	}
+}
+
+ACaveboundTree* ACaveboundGameMode::GetTree() const
+{
+	if (!Tree)
+	{
+		const_cast<ACaveboundGameMode*>(this)->EnsureTree();
+	}
+	return Tree;
+}
+
+float ACaveboundGameMode::GetTreeHealthPercent() const
+{
+	const ACaveboundTree* CurrentTree = GetTree();
+	if (!CurrentTree)
+	{
+		return 1.f;
+	}
+
+	const float MaxHealth = CurrentTree->GetMaxHealth();
+	if (MaxHealth <= KINDA_SMALL_NUMBER)
+	{
+		return 0.f;
+	}
+
+	return FMath::Clamp(CurrentTree->GetHealth() / MaxHealth, 0.f, 1.f);
 }
 
 void ACaveboundGameMode::EnsureTree()
@@ -318,12 +353,72 @@ void ACaveboundGameMode::BeginCombatPhase()
 
 void ACaveboundGameMode::EndRound()
 {
+	bEndRoundPending = false;
+
 	UpdateDifficultyAfterRound();
+
 	ClearRoundTimers();
 	EnemiesSpawnedThisRound = 0;
 	EnemiesAliveThisRound = 0;
 	EnemiesToSpawnThisRound = MaxEnemiesPerRound;
 	RoundState = ECaveboundRoundState::Idle;
+
+	// Expand after leaving Combat and off the enemy death call stack
+	if (bExpandBuildSlotsAfterRound && DifficultyScore >= BuildSlotExpandMinDifficulty)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimerForNextTick(
+				FTimerDelegate::CreateUObject(this, &ACaveboundGameMode::ExpandBuildSlotsNextTick));
+		}
+	}
+}
+
+void ACaveboundGameMode::RequestEndRound()
+{
+	if (bEndRoundPending || RoundState != ECaveboundRoundState::Combat)
+	{
+		return;
+	}
+
+	bEndRoundPending = true;
+
+	if (UWorld* World = GetWorld())
+	{
+		// Next tick: enemy OnDeath / ApplyDamage / projectile overlap have finished
+		World->GetTimerManager().SetTimerForNextTick(
+			FTimerDelegate::CreateUObject(this, &ACaveboundGameMode::EndRound));
+	}
+	else
+	{
+		EndRound();
+	}
+}
+
+void ACaveboundGameMode::ExpandBuildSlotsNextTick()
+{
+	ExpandBuildSlots();
+}
+
+int32 ACaveboundGameMode::ExpandBuildSlots()
+{
+	if (bGameOver || !GetWorld())
+	{
+		return 0;
+	}
+
+	const int32 Spawned = FCaveboundTerrainExpansion::ExpandBuildSlots(
+		GetWorld(),
+		BuildSlotExpandCells,
+		BuildSlotSpacingMultiplier,
+		BuildSlotSpacingFloor,
+		BuildSlotMaxGridSize,
+		BuildSlotPathSidePadding,
+		BuildSlotMaxNewPerExpand);
+
+	// Paths were extended with the map — refresh cached splines for the next wave
+	CollectPathSplines();
+	return Spawned;
 }
 
 void ACaveboundGameMode::ClearRoundTimers()
@@ -332,6 +427,8 @@ void ACaveboundGameMode::ClearRoundTimers()
 	{
 		World->GetTimerManager().ClearTimer(CollectionTimer);
 		World->GetTimerManager().ClearTimer(EnemySpawnTimer);
+		World->GetTimerManager().ClearTimer(EndRoundTimer);
+		World->GetTimerManager().ClearTimer(ExpandSlotsTimer);
 	}
 }
 
@@ -409,7 +506,7 @@ void ACaveboundGameMode::RegisterEnemyDefeated()
 
 	if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound && EnemiesAliveThisRound <= 0)
 	{
-		EndRound();
+		RequestEndRound();
 	}
 }
 

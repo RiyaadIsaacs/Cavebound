@@ -147,7 +147,12 @@ void ACaveboundEnemy::EnsureAnimationAssets()
 	// The skeleton needs an UpperBody slot so hit and punch clips can play there.
 	if (USkeleton* skeleton = Body->GetSkeletalMeshAsset() ? Body->GetSkeletalMeshAsset()->GetSkeleton() : nullptr)
 	{
-		skeleton->RegisterSlotNode(TEXT("UpperBody"));
+		static TSet<TWeakObjectPtr<USkeleton>> RegisteredUpperBodySlots;
+		if (!RegisteredUpperBodySlots.Contains(skeleton))
+		{
+			skeleton->RegisterSlotNode(TEXT("UpperBody"));
+			RegisteredUpperBodySlots.Add(skeleton);
+		}
 	}
 
 	// Keep the clip from moving the actor. The path spline already moves it.
