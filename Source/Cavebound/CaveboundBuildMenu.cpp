@@ -151,11 +151,7 @@ void UCaveboundBuildMenu::AddChoice(const FString& Label, TSubclassOf<AActor> De
 		return;
 	}
 
-	int32 Cost = 0;
-	if (const ACaveboundTurret* Defaults = DefenderClass->GetDefaultObject<ACaveboundTurret>())
-	{
-		Cost = Defaults->GetCost();
-	}
+	const int32 Cost = ACaveboundTurret::GetCostForClass(DefenderClass);
 
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
 	Button->SetBackgroundColor(FLinearColor(0.22f, 0.16f, 0.1f, 1.f));

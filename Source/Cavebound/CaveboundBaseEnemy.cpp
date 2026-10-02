@@ -414,13 +414,15 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 		return;
 	}
 
-	const FVector PathPointNow = Spline->GetLocationAtDistanceAlongSpline(
-		DistanceAlongSpline,
+	// Off the path after a fight. Walk to the closest point on it, not back to the spawn.
+	const float ClosestKey = Spline->FindInputKeyClosestToWorldLocation(GetActorLocation());
+	const float ClosestDistance = Spline->GetDistanceAlongSplineAtSplineInputKey(ClosestKey);
+	const FVector ClosestPoint = Spline->GetLocationAtDistanceAlongSpline(
+		ClosestDistance,
 		ESplineCoordinateSpace::World);
-	const FVector PathSpot = PathPointNow + FVector(0.f, 0.f, PathHeightOffset);
+	const FVector ClosestSpot = ClosestPoint + FVector(0.f, 0.f, PathHeightOffset);
 
-	// Came back from a fight off the path. Walk to the path instead of jumping there.
-	FVector ToPath = PathSpot - GetActorLocation();
+	FVector ToPath = ClosestSpot - GetActorLocation();
 	ToPath.Z = 0.f;
 	if (ToPath.Size() > MaxLaneOffset + 80.f)
 	{
@@ -428,6 +430,9 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 		SetActorRotation(ToPath.Rotation());
 		return;
 	}
+
+	// Back beside the path. Keep going from here.
+	DistanceAlongSpline = FMath::Clamp(ClosestDistance, 0.f, SplineLength);
 
 	// Move along the spline and don't overshoot the end
 	DistanceAlongSpline = FMath::Min(DistanceAlongSpline + MoveSpeed * SpeedScale * DeltaTime, SplineLength);

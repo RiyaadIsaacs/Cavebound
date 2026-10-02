@@ -711,9 +711,9 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 		return false;
 	}
 
-	const ACaveboundTurret* Defaults = Cast<ACaveboundTurret>(DefenderClass->GetDefaultObject());
+	const int32 Cost = ACaveboundTurret::GetCostForClass(DefenderClass);
 	ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>();
-	if (!Defaults || !GameMode || !GameMode->UseWood(Defaults->GetCost()))
+	if (Cost <= 0 || !GameMode || !GameMode->UseWood(Cost))
 	{
 		return false;
 	}
@@ -723,7 +723,7 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 	AActor* Spawned = World->SpawnActor<AActor>(DefenderClass, Slot->GetActorTransform(), SpawnParams);
 	if (!Spawned)
 	{
-		GameMode->AddWood(Defaults->GetCost());
+		GameMode->AddWood(Cost);
 		return false;
 	}
 

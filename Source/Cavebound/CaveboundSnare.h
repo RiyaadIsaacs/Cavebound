@@ -10,9 +10,7 @@ class UStaticMesh;
 class UMaterialInstanceDynamic;
 class ACaveboundBaseEnemy;
 
-/**
- * Catches one enemy at a time and holds them still. That enemy is never caught again.
- */
+//Grabs enemies and prevents them from acting
 UCLASS(Blueprintable)
 class CAVEBOUND_API ACaveboundSnare : public ACaveboundTurret
 {
@@ -25,25 +23,23 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 protected:
-	// How close an enemy must be before this trap can grab them.
+	// Range
 	UPROPERTY(EditAnywhere, Category = "Snare")
 	float CatchRange = 450.f;
 
-	// How long the grab lasts, in seconds.
+	// Hold duration
 	UPROPERTY(EditAnywhere, Category = "Snare")
-	float TrapDuration = 3.f;
+	float TrapDuration = 10.f;
 
-	// The enemy this trap is holding right now. Empty when the trap is free.
+	// Held enemy
 	TWeakObjectPtr<ACaveboundBaseEnemy> TrappedEnemy;
 
-	// How tall the post is. The rope starts at the top.
 	float PostHeight = 700.f;
 
 	// The path the rope follows.
 	UPROPERTY()
 	TObjectPtr<USplineComponent> RopeSpline;
 
-	// One thin piece of rope for each step along the path.
 	UPROPERTY()
 	TArray<TObjectPtr<USplineMeshComponent>> RopePieces;
 

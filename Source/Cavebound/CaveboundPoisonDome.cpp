@@ -13,8 +13,7 @@
 
 namespace
 {
-	// A plain unlit green material. The engine sphere is Nanite, which cannot be see-through,
-	// so this is only used after Nanite is turned off on the dome mesh.
+	// Green sphere visual
 	UMaterialInterface* MakeGreenDomeMaterial()
 	{
 		static TWeakObjectPtr<UMaterial> SavedMaterial;
@@ -60,28 +59,24 @@ namespace
 
 ACaveboundPoisonDome::ACaveboundPoisonDome()
 {
-	// The dome does not shoot. It slows and poisons enemies that walk into it.
 	bAutoFire = false;
 
-	// Poison tower in place of the old cone. The file is about 15 meters tall, so scale it down.
-	// Pivot is already on the ground, so it does not need a flip or a height offset.
+	// Poison tower asset
 	VisualMesh->SetRelativeScale3D(FVector(0.2f));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(
-		TEXT("/Game/Assets/Models/Towers/SM_PoisonTower_LVL4.SM_PoisonTower_LVL4"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(TEXT("/Game/Assets/Models/Towers/SM_PoisonTower_LVL4.SM_PoisonTower_LVL4"));
 	if (towerMesh.Succeeded())
 	{
 		VisualMesh->SetStaticMesh(towerMesh.Object);
 	}
 
-	// See-through green dome. No collision, so enemies can walk through it.
+	// Transparent dome
 	PoisonCloud = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PoisonCloud"));
 	PoisonCloud->SetupAttachment(SceneRoot);
 	PoisonCloud->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	PoisonCloud->SetCastShadow(false);
-	// Nanite ignores see-through materials and draws a solid white ball.
 	PoisonCloud->bDisallowNanite = true;
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> sphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -90,7 +85,7 @@ ACaveboundPoisonDome::ACaveboundPoisonDome()
 		PoisonCloud->SetStaticMesh(sphereMesh.Object);
 	}
 
-	Cost = 190;
+	Cost = 150;
 	MaxHealth = 130.f;
 	Health = MaxHealth;
 }
@@ -99,7 +94,6 @@ void ACaveboundPoisonDome::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 
-	// Match the sphere to the poison range after blueprint values are applied.
 	UpdatePoisonCloud();
 }
 
@@ -111,13 +105,12 @@ void ACaveboundPoisonDome::BeginPlay()
 
 void ACaveboundPoisonDome::PlayDamageFlash()
 {
-	// Only the tower flashes. The green dome stays as it is.
-	TArray<UStaticMeshComponent*> coneOnly;
+	TArray<UStaticMeshComponent*> tower;
 	if (VisualMesh)
 	{
-		coneOnly.Add(VisualMesh);
+		tower.Add(VisualMesh);
 	}
-	FCaveboundDamageFlash::FlashMeshes(this, coneOnly, HitFlashTimer, FLinearColor::White, HitFlashDuration);
+	FCaveboundDamageFlash::FlashMeshes(this, tower, HitFlashTimer, FLinearColor::White, HitFlashDuration);
 }
 
 void ACaveboundPoisonDome::Tick(float DeltaTime)
@@ -145,11 +138,11 @@ bool ACaveboundPoisonDome::IsCombatRound() const
 		return false;
 	}
 
-	// If there is no game mode, still poison. Otherwise only during combat.
 	const ACaveboundGameMode* gameMode = world->GetAuthGameMode<ACaveboundGameMode>();
 	return !gameMode || gameMode->GetRoundState() == ECaveboundRoundState::Combat;
 }
 
+// Updates cloud size
 void ACaveboundPoisonDome::UpdatePoisonCloud()
 {
 	if (!PoisonCloud)
@@ -157,7 +150,6 @@ void ACaveboundPoisonDome::UpdatePoisonCloud()
 		return;
 	}
 
-	// Nanite draws the solid white ball and ignores a see-through material.
 	PoisonCloud->bDisallowNanite = true;
 
 	if (UMaterialInterface* Green = MakeGreenDomeMaterial())
@@ -165,13 +157,12 @@ void ACaveboundPoisonDome::UpdatePoisonCloud()
 		PoisonCloud->SetMaterial(0, Green);
 	}
 
-	// The engine sphere is centered on its origin and has a radius of 50.
-	// Width matches the poison range. The center sits on the ground, so the top half is the dome.
 	const float widthScale = DomeRadius / 50.f;
 	PoisonCloud->SetRelativeScale3D(FVector(widthScale, widthScale, widthScale));
 	PoisonCloud->SetRelativeLocation(FVector::ZeroVector);
 }
 
+// Enemy effects
 void ACaveboundPoisonDome::UpdateDome(float DeltaTime)
 {
 	UWorld* world = GetWorld();
@@ -183,7 +174,6 @@ void ACaveboundPoisonDome::UpdateDome(float DeltaTime)
 	TArray<AActor*> allEnemies;
 	UGameplayStatics::GetAllActorsOfClass(world, ACaveboundBaseEnemy::StaticClass(), allEnemies);
 
-	// Enemies standing inside the dome this frame.
 	TArray<TWeakObjectPtr<ACaveboundBaseEnemy>> enemiesInsideDome;
 	const FVector domeLocation = GetActorLocation();
 
@@ -200,7 +190,6 @@ void ACaveboundPoisonDome::UpdateDome(float DeltaTime)
 			continue;
 		}
 
-		// Slow them, then deal a poison hit on a timer.
 		enemy->ApplySlow(SlowMultiplier);
 		enemiesInsideDome.Add(enemy);
 
@@ -213,7 +202,6 @@ void ACaveboundPoisonDome::UpdateDome(float DeltaTime)
 		}
 	}
 
-	// Forget enemies that walked out, so the next time they enter the timer starts again.
 	for (auto savedEnemy = PoisonTimeRemaining.CreateIterator(); savedEnemy; ++savedEnemy)
 	{
 		if (!enemiesInsideDome.Contains(savedEnemy.Key()))
