@@ -37,7 +37,7 @@ ACaveboundSnare::ACaveboundSnare()
 		}
 	}
 
-	Cost = 140;
+	Cost = 70;
 	MaxHealth = 100.f;
 	Health = MaxHealth;
 }
