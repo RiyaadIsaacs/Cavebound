@@ -11,7 +11,6 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	// Create mesh
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	SetRootComponent(VisualMesh);
 	// Enemies Block WorldDynamic by default, which turns arrow Overlap into Block and
@@ -189,8 +188,7 @@ AActor* ACaveboundBaseEnemy::ResolveAttackTarget() const
 	}
 
 	ACaveboundTree* CurrentTree = Tree.Get();
-	if (CurrentTree && !CurrentTree->IsDestroyed()
-		&& IsInAttackRangeOf(CurrentTree))
+	if (CurrentTree && !CurrentTree->IsDestroyed() && IsInAttackRangeOf(CurrentTree))
 	{
 		return CurrentTree;
 	}
@@ -207,6 +205,117 @@ bool ACaveboundBaseEnemy::IsInAttackRangeOf(const AActor* Target) const
 
 	// Dist2D ignores height differences between meshes
 	return FVector::Dist2D(GetActorLocation(), Target->GetActorLocation()) <= AttackRange;
+}
+
+float ACaveboundBaseEnemy::ComputeBoidLaneOffset(const FVector& PathPoint, const FVector& PathRight) const
+{
+	if (!bUseBoids || PathRight.IsNearlyZero())
+	{
+		return 0.f;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0.f;
+	}
+
+	TArray<AActor*> FoundEnemies;
+	UGameplayStatics::GetAllActorsOfClass(World, ACaveboundBaseEnemy::StaticClass(), FoundEnemies);
+
+	FVector Separation = FVector::ZeroVector;
+	FVector Alignment = FVector::ZeroVector;
+	FVector CohesionSum = FVector::ZeroVector;
+	int32 NeighbourCount = 0;
+
+	const FVector MyLocation = GetActorLocation();
+
+	for (AActor* Actor : FoundEnemies)
+	{
+		ACaveboundBaseEnemy* Other = Cast<ACaveboundBaseEnemy>(Actor);
+		if (!Other || Other == this || Other->IsDead())
+		{
+			continue;
+		}
+
+		const FVector ToOther = Other->GetActorLocation() - MyLocation;
+		const float Dist = ToOther.Size2D();
+		if (Dist > SeparationRadius || Dist < KINDA_SMALL_NUMBER)
+		{
+			continue;
+		}
+
+		++NeighbourCount;
+
+		// Stronger push when closer
+		const float Push = (SeparationRadius - Dist) / SeparationRadius;
+		Separation -= FVector(ToOther.X, ToOther.Y, 0.f).GetSafeNormal() * Push;
+
+		Alignment += Other->GetActorForwardVector();
+		CohesionSum += Other->GetActorLocation();
+	}
+
+	if (NeighbourCount == 0)
+	{
+		return 0.f;
+	}
+
+	Alignment /= static_cast<float>(NeighbourCount);
+	const FVector Cohesion = ((CohesionSum / static_cast<float>(NeighbourCount)) - MyLocation).GetSafeNormal2D();
+
+	FVector Combined =
+		Separation * SeparationStrength
+		+ Alignment.GetSafeNormal2D() * AlignmentStrength
+		+ Cohesion * CohesionStrength;
+
+	Combined.Z = 0.f;
+	const float LaneOffset = FVector::DotProduct(Combined, PathRight);
+	return FMath::Clamp(LaneOffset * SeparationRadius, -MaxLaneOffset, MaxLaneOffset);
+}
+
+float ACaveboundBaseEnemy::ComputeForwardStagger() const
+{
+	if (!bUseBoids || ForwardStaggerDistance <= 0.f)
+	{
+		return 1.f;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 1.f;
+	}
+
+	TArray<AActor*> FoundEnemies;
+	UGameplayStatics::GetAllActorsOfClass(World, ACaveboundBaseEnemy::StaticClass(), FoundEnemies);
+
+	float SpeedMul = 1.f;
+	for (AActor* Actor : FoundEnemies)
+	{
+		ACaveboundBaseEnemy* Other = Cast<ACaveboundBaseEnemy>(Actor);
+		if (!Other || Other == this || Other->IsDead())
+		{
+			continue;
+		}
+
+		// Only stagger against enemies on the same spline
+		if (Other->PathSpline.Get() != PathSpline.Get())
+		{
+			continue;
+		}
+
+		const float DistDelta = Other->GetDistanceAlongSpline() - DistanceAlongSpline;
+		if (FMath::Abs(DistDelta) < ForwardStaggerDistance)
+		{
+			// If nearly tied or slightly ahead of us, ease off so packs desync
+			if (DistDelta >= -KINDA_SMALL_NUMBER)
+			{
+				SpeedMul = FMath::Min(SpeedMul, 1.f - ForwardStaggerStrength);
+			}
+		}
+	}
+
+	return FMath::Clamp(SpeedMul, 0.4f, 1.f);
 }
 
 void ACaveboundBaseEnemy::Tick(float DeltaTime)
@@ -285,6 +394,8 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 	}
 
 	const float SplineLength = Spline->GetSplineLength();
+	const float SpeedScale = GetMoveSpeedScale() * ComputeForwardStagger();
+
 	if (DistanceAlongSpline >= SplineLength)
 	{
 		// Path ended before the trunk
@@ -294,23 +405,37 @@ void ACaveboundBaseEnemy::MoveAlongPath(float DeltaTime)
 			ToTree.Z = 0.f;
 			if (ToTree.Size() > AttackRange)
 			{
-				AddActorWorldOffset(ToTree.GetSafeNormal() * MoveSpeed * GetMoveSpeedScale() * DeltaTime);
+				AddActorWorldOffset(ToTree.GetSafeNormal() * MoveSpeed * SpeedScale * DeltaTime);
 			}
 		}
 		return;
 	}
 
 	// Move along the spline and don't overshoot the end
-	DistanceAlongSpline = FMath::Min(DistanceAlongSpline + MoveSpeed * GetMoveSpeedScale() * DeltaTime, SplineLength);
+	DistanceAlongSpline = FMath::Min(DistanceAlongSpline + MoveSpeed * SpeedScale * DeltaTime, SplineLength);
 
 	const FVector PathPoint = Spline->GetLocationAtDistanceAlongSpline(
 		DistanceAlongSpline,
 		ESplineCoordinateSpace::World);
-	SetActorLocation(PathPoint + FVector(0.f, 0.f, PathHeightOffset));
 
-	const FVector Tangent = Spline->GetTangentAtDistanceAlongSpline(
+	FVector Tangent = Spline->GetTangentAtDistanceAlongSpline(
 		DistanceAlongSpline,
 		ESplineCoordinateSpace::World);
+	Tangent.Z = 0.f;
+
+	FVector PathRight = FVector::CrossProduct(FVector::UpVector, Tangent.GetSafeNormal());
+	if (PathRight.IsNearlyZero())
+	{
+		PathRight = FVector::RightVector;
+	}
+	else
+	{
+		PathRight.Normalize();
+	}
+
+	const float LaneOffset = ComputeBoidLaneOffset(PathPoint, PathRight);
+	SetActorLocation(PathPoint + PathRight * LaneOffset + FVector(0.f, 0.f, PathHeightOffset));
+
 	if (!Tangent.IsNearlyZero())
 	{
 		SetActorRotation(Tangent.Rotation());

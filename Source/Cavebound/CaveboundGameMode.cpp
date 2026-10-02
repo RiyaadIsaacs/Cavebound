@@ -1,9 +1,12 @@
 #include "CaveboundGameMode.h"
+#include "CaveboundBruteEnemy.h"
 #include "CaveboundCharacter.h"
 #include "CaveboundEnemy.h"
 #include "CaveboundBaseEnemy.h"
+#include "CaveboundLongRangeEnemy.h"
 #include "CaveboundPlayerController.h"
 #include "CaveboundTree.h"
+#include "CaveboundTurret.h"
 #include "Components/SplineComponent.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -14,6 +17,21 @@ ACaveboundGameMode::ACaveboundGameMode()
 	DefaultPawnClass = ACaveboundCharacter::StaticClass();
 	PlayerControllerClass = ACaveboundPlayerController::StaticClass();
 	EnemyClass = ACaveboundEnemy::StaticClass();
+
+	EnemySpawnPool.Reset();
+	{
+		FCaveboundEnemySpawnEntry Basic;
+		Basic.EnemyClass = ACaveboundEnemy::StaticClass();
+		EnemySpawnPool.Add(Basic);
+
+		FCaveboundEnemySpawnEntry Brute;
+		Brute.EnemyClass = ACaveboundBruteEnemy::StaticClass();
+		EnemySpawnPool.Add(Brute);
+
+		FCaveboundEnemySpawnEntry LongRange;
+		LongRange.EnemyClass = ACaveboundLongRangeEnemy::StaticClass();
+		EnemySpawnPool.Add(LongRange);
+	}
 }
 
 void ACaveboundGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
@@ -98,15 +116,158 @@ void ACaveboundGameMode::CollectPathSplines()
 				continue;
 			}
 
-			const FString SplineName = Spline->GetName();
-
 			// BP_ProceduralTerrain names them Path1 / Path2 / Path3
-			if (SplineName.Contains(TEXT("Path")))
+			if (Spline->GetName().Contains(TEXT("Path")))
 			{
 				PathSplines.Add(Spline);
 			}
 		}
 	}
+}
+
+int32 ACaveboundGameMode::CountLivingTurrets() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0;
+	}
+
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsOfClass(World, ACaveboundTurret::StaticClass(), Found);
+
+	int32 Count = 0;
+	for (AActor* Actor : Found)
+	{
+		if (const ACaveboundTurret* Turret = Cast<ACaveboundTurret>(Actor))
+		{
+			if (!Turret->IsDestroyed())
+			{
+				++Count;
+			}
+		}
+	}
+	return Count;
+}
+
+float ACaveboundGameMode::GetCurrentSpawnInterval() const
+{
+	const float Alpha = FMath::Clamp(DifficultyScore / 100.f, 0.f, 1.f);
+	return FMath::Lerp(MaxSpawnInterval, MinSpawnInterval, Alpha);
+}
+
+void ACaveboundGameMode::PrepareWaveBudget()
+{
+	TurretsAtCombatStart = CountLivingTurrets();
+	TreeHealthAtCombatStart = Tree ? Tree->GetHealth() : 0.f;
+	CombatStartTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+
+	const int32 RoundBonus = RoundIndex * 2;
+	const int32 ScoreBonus = DifficultyScore / 12;
+	EnemiesToSpawnThisRound = FMath::Max(4, MaxEnemiesPerRound + RoundBonus + ScoreBonus);
+}
+
+void ACaveboundGameMode::UpdateDifficultyAfterRound()
+{
+	UWorld* World = GetWorld();
+	const float Now = World ? World->GetTimeSeconds() : CombatStartTimeSeconds;
+	const float ClearTime = FMath::Max(0.f, Now - CombatStartTimeSeconds);
+
+	const float TreeHealthNow = Tree ? Tree->GetHealth() : 0.f;
+	const float TreeDamageTaken = FMath::Max(0.f, TreeHealthAtCombatStart - TreeHealthNow);
+	const float TreeMax = Tree ? FMath::Max(1.f, Tree->GetMaxHealth()) : 1.f;
+	const float DamageRatio = TreeDamageTaken / TreeMax;
+
+	int32 Delta = 5; // base climb per cleared round
+
+	if (DamageRatio < 0.08f)
+	{
+		Delta += 6;
+	}
+	else if (DamageRatio < 0.2f)
+	{
+		Delta += 3;
+	}
+	else if (DamageRatio > 0.45f)
+	{
+		Delta -= 8;
+	}
+	else if (DamageRatio > 0.3f)
+	{
+		Delta -= 4;
+	}
+
+	// Fast clear = skilled; slow clear = struggling
+	if (ClearTime > 0.f && ClearTime < 35.f)
+	{
+		Delta += 4;
+	}
+	else if (ClearTime > 70.f)
+	{
+		Delta -= 5;
+	}
+
+	// Play style: invested defences climb faster so Brutes / Long Range unlock sooner
+	if (TurretsAtCombatStart >= 3)
+	{
+		Delta += 3;
+	}
+	else if (TurretsAtCombatStart == 0)
+	{
+		Delta -= 2;
+	}
+
+	DifficultyScore = FMath::Clamp(DifficultyScore + Delta, MinDifficultyScore, MaxDifficultyScore);
+	++RoundIndex;
+}
+
+TSubclassOf<ACaveboundBaseEnemy> ACaveboundGameMode::PickEnemyClassForSpawn() const
+{
+	TArray<TSubclassOf<ACaveboundBaseEnemy>> Eligible;
+	Eligible.Reserve(EnemySpawnPool.Num());
+
+	for (const FCaveboundEnemySpawnEntry& Entry : EnemySpawnPool)
+	{
+		if (!Entry.EnemyClass)
+		{
+			continue;
+		}
+
+		const ACaveboundBaseEnemy* CDO = Entry.EnemyClass->GetDefaultObject<ACaveboundBaseEnemy>();
+		if (!CDO)
+		{
+			continue;
+		}
+
+		if (DifficultyScore >= CDO->GetMinDifficultyToSpawn())
+		{
+			Eligible.Add(Entry.EnemyClass);
+		}
+	}
+
+	if (Eligible.Num() == 0)
+	{
+		return EnemyClass;
+	}
+
+	// Light play-style bias: with several turrets, prefer Brute when it is eligible
+	if (TurretsAtCombatStart >= 2)
+	{
+		for (const TSubclassOf<ACaveboundBaseEnemy>& Class : Eligible)
+		{
+			if (Class && Class->IsChildOf(ACaveboundBruteEnemy::StaticClass()))
+			{
+				if (FMath::FRand() < 0.45f)
+				{
+					return Class;
+				}
+				break;
+			}
+		}
+	}
+
+	const int32 Index = FMath::RandRange(0, Eligible.Num() - 1);
+	return Eligible[Index];
 }
 
 void ACaveboundGameMode::StartRound()
@@ -124,7 +285,12 @@ void ACaveboundGameMode::StartRound()
 
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().SetTimer(CollectionTimer,this,&ACaveboundGameMode::BeginCombatPhase,CollectionDuration,false);
+		World->GetTimerManager().SetTimer(
+			CollectionTimer,
+			this,
+			&ACaveboundGameMode::BeginCombatPhase,
+			CollectionDuration,
+			false);
 	}
 }
 
@@ -136,18 +302,27 @@ void ACaveboundGameMode::BeginCombatPhase()
 	}
 
 	RoundState = ECaveboundRoundState::Combat;
+	PrepareWaveBudget();
 
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().SetTimer(EnemySpawnTimer,this,&ACaveboundGameMode::SpawnEnemy,EnemySpawnInterval,true,0.f);
+		World->GetTimerManager().SetTimer(
+			EnemySpawnTimer,
+			this,
+			&ACaveboundGameMode::SpawnEnemy,
+			GetCurrentSpawnInterval(),
+			true,
+			0.f);
 	}
 }
 
 void ACaveboundGameMode::EndRound()
 {
+	UpdateDifficultyAfterRound();
 	ClearRoundTimers();
 	EnemiesSpawnedThisRound = 0;
 	EnemiesAliveThisRound = 0;
+	EnemiesToSpawnThisRound = MaxEnemiesPerRound;
 	RoundState = ECaveboundRoundState::Idle;
 }
 
@@ -167,7 +342,7 @@ void ACaveboundGameMode::SpawnEnemy()
 		return;
 	}
 
-	if (EnemiesSpawnedThisRound >= MaxEnemiesPerRound)
+	if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound)
 	{
 		if (UWorld* World = GetWorld())
 		{
@@ -196,7 +371,8 @@ void ACaveboundGameMode::SpawnEnemy()
 	}
 
 	UWorld* World = GetWorld();
-	if (!World || !ChosenSpline || !EnemyClass)
+	const TSubclassOf<ACaveboundBaseEnemy> ChosenClass = PickEnemyClassForSpawn();
+	if (!World || !ChosenSpline || !ChosenClass)
 	{
 		return;
 	}
@@ -204,7 +380,7 @@ void ACaveboundGameMode::SpawnEnemy()
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	if (ACaveboundBaseEnemy* Enemy = World->SpawnActor<ACaveboundBaseEnemy>(
-		EnemyClass,
+		ChosenClass,
 		ChosenSpline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World),
 		FRotator::ZeroRotator,
 		SpawnParams))
@@ -214,7 +390,7 @@ void ACaveboundGameMode::SpawnEnemy()
 		++EnemiesSpawnedThisRound;
 		++EnemiesAliveThisRound;
 
-		if (EnemiesSpawnedThisRound >= MaxEnemiesPerRound)
+		if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound)
 		{
 			World->GetTimerManager().ClearTimer(EnemySpawnTimer);
 		}
@@ -231,7 +407,7 @@ void ACaveboundGameMode::RegisterEnemyDefeated()
 
 	EnemiesAliveThisRound = FMath::Max(0, EnemiesAliveThisRound - 1);
 
-	if (EnemiesSpawnedThisRound >= MaxEnemiesPerRound && EnemiesAliveThisRound <= 0)
+	if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound && EnemiesAliveThisRound <= 0)
 	{
 		EndRound();
 	}

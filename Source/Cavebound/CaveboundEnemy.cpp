@@ -91,6 +91,15 @@ ACaveboundEnemy::ACaveboundEnemy()
 	{
 		MeleeMontage = MeleeAsset.Object;
 	}
+
+	// Defaults for this enemy type (Adaptive Threat Budget gate)
+	MinDifficultyToSpawn = 0;
+	MaxHealth = 60.f;
+	Health = MaxHealth;
+	MoveSpeed = 280.f;
+	AttackDamage = 8.f;
+	AttackRange = 280.f;
+	AttackInterval = 1.0f;
 }
 
 void ACaveboundEnemy::EnsureAnimationAssets()
