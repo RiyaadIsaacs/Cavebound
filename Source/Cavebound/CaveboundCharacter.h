@@ -12,6 +12,7 @@ class UMaterialInterface;
 class UAnimSequence;
 class UBlendSpace;
 class ACaveboundTree;
+class ACaveboundRockDeposit;
 
 /**
   The player's body in the world
@@ -33,6 +34,9 @@ public:
 	// Clicked the tree: walk to it, then mine wood while standing in range. 
 	void SetTreeTarget(ACaveboundTree* Tree);
 
+	// Clicked a rock pile: walk to it, then mine rock while standing in range.
+	void SetRockTarget(ACaveboundRockDeposit* Rock);
+
 	// Hold right click and drag to rotate mouse
 
 	void OrbitCamera(float MouseX, float MouseY);
@@ -40,6 +44,7 @@ public:
 protected:
 	void StopMining();
 	void TryMine(float DeltaTime);
+	void TryHarvestRock(float DeltaTime);
 	void UpdateLocomotion(float DeltaTime);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
@@ -99,6 +104,9 @@ protected:
 
 	// Main tower to mine wood from. Null if we are not mining
 	TWeakObjectPtr<ACaveboundTree> TargetTree;
+
+	// Rock pile being mined. Null if we are not mining rock.
+	TWeakObjectPtr<ACaveboundRockDeposit> TargetRock;
 
 	// Accumulates time while in mine range; resets when we step away
 	float MiningTime = 0.f;

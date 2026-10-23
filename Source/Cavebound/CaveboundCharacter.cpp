@@ -1,5 +1,6 @@
 #include "CaveboundCharacter.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundRockDeposit.h"
 #include "CaveboundTree.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimSingleNodeInstance.h"
@@ -188,6 +189,7 @@ void ACaveboundCharacter::SetMoveDestination(const FVector& Destination)
 
 void ACaveboundCharacter::SetTreeTarget(ACaveboundTree* Tree)
 {
+	StopMining();
 	if (!Tree)
 	{
 		SetMoveDestination(GetActorLocation());
@@ -202,9 +204,29 @@ void ACaveboundCharacter::SetTreeTarget(ACaveboundTree* Tree)
 	bHasMoveDestination = true;
 }
 
+void ACaveboundCharacter::SetRockTarget(ACaveboundRockDeposit* Rock)
+{
+	StopMining();
+	if (!Rock || !Rock->IsHarvestable())
+	{
+		return;
+	}
+
+	TargetRock = Rock;
+	MiningTime = 0.f;
+	MoveDestination = Rock->GetActorLocation();
+	bHasMoveDestination = true;
+}
+
 void ACaveboundCharacter::StopMining()
 {
+	if (ACaveboundRockDeposit* Rock = TargetRock.Get())
+	{
+		Rock->StopHarvest();
+	}
+
 	TargetTree = nullptr;
+	TargetRock = nullptr;
 	MiningTime = 0.f;
 }
 
@@ -256,11 +278,54 @@ void ACaveboundCharacter::TryMine(float DeltaTime)
 	}
 }
 
+void ACaveboundCharacter::TryHarvestRock(float DeltaTime)
+{
+	ACaveboundRockDeposit* Rock = TargetRock.Get();
+	if (!Rock || !Rock->IsHarvestable())
+	{
+		StopMining();
+		return;
+	}
+
+	FVector ToRock = Rock->GetActorLocation() - GetActorLocation();
+	ToRock.Z = 0.f;
+	if (ToRock.Size() > Rock->GetMineRange())
+	{
+		Rock->StopHarvest();
+		return;
+	}
+
+	bHasMoveDestination = false;
+
+	if (UWorld* World = GetWorld())
+	{
+		if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
+		{
+			if (!GameMode->CanCollectWood())
+			{
+				Rock->StopHarvest();
+				GameMode->NotifyMiningBlocked();
+				return;
+			}
+		}
+	}
+
+	if (Rock->AddHarvestTime(DeltaTime))
+	{
+		TargetRock = nullptr;
+		MiningTime = 0.f;
+	}
+}
+
 void ACaveboundCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (TargetTree.IsValid())
+	if (TargetRock.IsValid())
+	{
+		TryHarvestRock(DeltaTime);
+	}
+	else if (TargetTree.IsValid())
 	{
 		TryMine(DeltaTime);
 	}
@@ -276,6 +341,10 @@ void ACaveboundCharacter::Tick(float DeltaTime)
 		if (ACaveboundTree* Tree = TargetTree.Get())
 		{
 			StopDistance = Tree->GetMineRange();
+		}
+		else if (ACaveboundRockDeposit* Rock = TargetRock.Get())
+		{
+			StopDistance = Rock->GetMineRange();
 		}
 
 		if (ToTarget.Size() <= StopDistance)

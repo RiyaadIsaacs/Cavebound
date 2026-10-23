@@ -9,11 +9,15 @@ ACaveboundCannon::ACaveboundCannon()
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(TEXT("/Game/Assets/Models/Towers/SM_CannonTower_LVL4.SM_CannonTower_LVL4"));
-	if (towerMesh.Succeeded())
-	{
-		VisualMesh->SetStaticMesh(towerMesh.Object);
-	}
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level1Mesh(TEXT("/Game/Assets/Models/Towers/SM_CannonTower_LVL1.SM_CannonTower_LVL1"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level2Mesh(TEXT("/Game/Assets/Models/Towers/SM_CannonTower_LVL2.SM_CannonTower_LVL2"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level3Mesh(TEXT("/Game/Assets/Models/Towers/SM_CannonTower_LVL3.SM_CannonTower_LVL3"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> fallbackMesh(TEXT("/Game/Assets/Models/Towers/SM_CannonTower_LVL4.SM_CannonTower_LVL4"));
+	UseTowerMeshes(
+		level1Mesh.Succeeded() ? level1Mesh.Object : nullptr,
+		level2Mesh.Succeeded() ? level2Mesh.Object : nullptr,
+		level3Mesh.Succeeded() ? level3Mesh.Object : nullptr,
+		fallbackMesh.Succeeded() ? fallbackMesh.Object : nullptr);
 
 	ProjectileClass = ACaveboundCannonShell::StaticClass();
 	FirePointOffset = FVector(70.f, 0.f, 220.f);

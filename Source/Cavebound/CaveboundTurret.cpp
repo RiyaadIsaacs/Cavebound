@@ -29,6 +29,173 @@ int32 ACaveboundTurret::GetCostForClass(TSubclassOf<AActor> DefenderClass)
 	return 0;
 }
 
+void ACaveboundTurret::RememberBaseStats()
+{
+	if (bBaseStatsSaved)
+	{
+		return;
+	}
+
+	BaseMaxHealth = MaxHealth;
+	BaseFireInterval = FireInterval;
+	BaseProjectileDamage = ProjectileDamage;
+	WoodSpent = Cost;
+	bBaseStatsSaved = true;
+}
+
+void ACaveboundTurret::UseTowerMeshes(UStaticMesh* Level1, UStaticMesh* Level2, UStaticMesh* Level3, UStaticMesh* Fallback)
+{
+	UpgradeMeshes.Reset();
+
+	UStaticMesh* first = Level1 ? Level1 : Fallback;
+	UStaticMesh* second = Level2 ? Level2 : first;
+	UStaticMesh* third = Level3 ? Level3 : second;
+	if (first)
+	{
+		UpgradeMeshes.Add(first);
+	}
+	if (second)
+	{
+		UpgradeMeshes.Add(second);
+	}
+	if (third)
+	{
+		UpgradeMeshes.Add(third);
+	}
+
+	ApplyUpgradeMesh();
+}
+
+void ACaveboundTurret::ApplyUpgradeMesh()
+{
+	if (!VisualMesh || UpgradeMeshes.Num() == 0)
+	{
+		return;
+	}
+
+	const int32 index = FMath::Clamp(UpgradeLevel, 0, UpgradeMeshes.Num() - 1);
+	if (UpgradeMeshes[index])
+	{
+		VisualMesh->SetStaticMesh(UpgradeMeshes[index]);
+	}
+}
+
+void ACaveboundTurret::ApplyLevelBonus()
+{
+	const float growth = 1.f + UpgradeLevel * 0.4f;
+	const float oldMax = MaxHealth;
+	MaxHealth = BaseMaxHealth * growth;
+	Health = FMath::Clamp(Health + FMath::Max(0.f, MaxHealth - oldMax), 1.f, MaxHealth);
+	FireInterval = BaseFireInterval * FMath::Max(0.45f, 1.f - UpgradeLevel * 0.22f);
+	ProjectileDamage = BaseProjectileDamage * growth;
+	ApplyUpgradeMesh();
+}
+
+int32 ACaveboundTurret::GetNextUpgradeRockCost() const
+{
+	if (UpgradeLevel >= 2)
+	{
+		return 0;
+	}
+
+	if (UpgradeLevel == 0)
+	{
+		return FMath::Max(8, FMath::CeilToInt(Cost * 0.6f));
+	}
+
+	return FMath::Max(12, FMath::CeilToInt(Cost * 0.9f));
+}
+
+int32 ACaveboundTurret::GetNextUpgradeWoodCost() const
+{
+	if (UpgradeLevel != 1)
+	{
+		return 0;
+	}
+
+	return FMath::Max(8, FMath::CeilToInt(Cost * 0.5f));
+}
+
+int32 ACaveboundTurret::GetRepairCost() const
+{
+	if (Health <= 0.f || MaxHealth <= 0.f || Health >= MaxHealth)
+	{
+		return 0;
+	}
+
+	const float missing = 1.f - (Health / MaxHealth);
+	return FMath::Max(1, FMath::CeilToInt(Cost * 0.5f * missing));
+}
+
+void ACaveboundTurret::GetDisarmRefund(int32& OutWood, int32& OutRock) const
+{
+	OutWood = 0;
+	OutRock = 0;
+	if (MaxHealth <= 0.f || Health <= 0.f)
+	{
+		return;
+	}
+
+	const float portion = 0.5f * FMath::Clamp(Health / MaxHealth, 0.f, 1.f);
+	if (WoodSpent > 0)
+	{
+		OutWood = FMath::CeilToInt(WoodSpent * portion);
+	}
+	if (RockSpent > 0)
+	{
+		OutRock = FMath::CeilToInt(RockSpent * portion);
+	}
+}
+
+bool ACaveboundTurret::TryUpgrade(ACaveboundGameMode* GameMode)
+{
+	if (!GameMode || IsDestroyed() || UpgradeLevel >= 2)
+	{
+		return false;
+	}
+
+	const int32 rockCost = GetNextUpgradeRockCost();
+	const int32 woodCost = GetNextUpgradeWoodCost();
+	if (GameMode->GetRock() < rockCost || GameMode->GetWood() < woodCost)
+	{
+		return false;
+	}
+
+	if (rockCost > 0 && !GameMode->UseRock(rockCost))
+	{
+		return false;
+	}
+
+	if (woodCost > 0 && !GameMode->UseWood(woodCost))
+	{
+		GameMode->GiveRock(rockCost);
+		return false;
+	}
+
+	RockSpent += rockCost;
+	WoodSpent += woodCost;
+	++UpgradeLevel;
+	ApplyLevelBonus();
+	return true;
+}
+
+bool ACaveboundTurret::TryRepair(ACaveboundGameMode* GameMode)
+{
+	const int32 repairCost = GetRepairCost();
+	if (!GameMode || repairCost <= 0 || IsDestroyed())
+	{
+		return false;
+	}
+
+	if (!GameMode->UseWood(repairCost))
+	{
+		return false;
+	}
+
+	Health = MaxHealth;
+	return true;
+}
+
 ACaveboundTurret::ACaveboundTurret()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -43,11 +210,14 @@ ACaveboundTurret::ACaveboundTurret()
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Block);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL1.SM_ArcherTower_LVL1"));
-	if (towerMesh.Succeeded())
-	{
-		VisualMesh->SetStaticMesh(towerMesh.Object);
-	}
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level1Mesh(TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL1.SM_ArcherTower_LVL1"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level2Mesh(TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL2.SM_ArcherTower_LVL2"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level3Mesh(TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL3.SM_ArcherTower_LVL3"));
+	UseTowerMeshes(
+		level1Mesh.Succeeded() ? level1Mesh.Object : nullptr,
+		level2Mesh.Succeeded() ? level2Mesh.Object : nullptr,
+		level3Mesh.Succeeded() ? level3Mesh.Object : nullptr,
+		level1Mesh.Succeeded() ? level1Mesh.Object : nullptr);
 	VisualMesh->SetVisibility(true);
 	VisualMesh->SetHiddenInGame(false);
 
@@ -63,6 +233,8 @@ void ACaveboundTurret::BeginPlay()
 	Super::BeginPlay();
 
 	Health = MaxHealth;
+
+	RememberBaseStats();
 
 	if (VisualMesh)
 	{

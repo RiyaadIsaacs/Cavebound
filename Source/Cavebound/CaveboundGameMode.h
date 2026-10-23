@@ -45,11 +45,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	int32 GetWood() const { return Wood; }
 
+	UFUNCTION(BlueprintPure, Category = "Cavebound")
+	int32 GetRock() const { return Rock; }
+
 	void AddWood(int32 Amount);
+
+	// Gives wood back outside of mining, such as a disarm refund.
+	void GiveWood(int32 Amount);
+	void GiveRock(int32 Amount);
 
 	// Spend wood when placing a turret
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	bool UseWood(int32 Amount);
+
+	UFUNCTION(BlueprintCallable, Category = "Cavebound")
+	bool UseRock(int32 Amount);
 
 	// Called by the tree when its health reaches 0
 	void HandleTreeDestroyed();
@@ -127,6 +137,8 @@ public:
 protected:
 	// Spawn the magical wood tree if the level does not already have one
 	void EnsureTree();
+	void EnsureRockField();
+	void NotifyRockDepositsWaveEnded();
 	// Guarantee concrete EnemyClass
 	void EnsureEnemySpawnConfig();
 	// Find Path1/Path2/Path3 (falls back to any valid world spline)
@@ -181,6 +193,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Resources")
 	int32 Wood = 0;
+
+	UPROPERTY(VisibleAnywhere, Category = "Resources")
+	int32 Rock = 0;
 
 	UPROPERTY(VisibleAnywhere, Category = "Game")
 	bool bGameOver = false;

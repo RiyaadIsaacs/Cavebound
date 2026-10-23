@@ -126,13 +126,15 @@ void UCaveboundBuildMenu::OpenForSlot(AActor* BuildSlot)
 	}
 
 	int32 Wood = 0;
+	int32 Rock = 0;
 	if (ACaveboundGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACaveboundGameMode>() : nullptr)
 	{
 		Wood = GameMode->GetWood();
+		Rock = GameMode->GetRock();
 	}
 	if (WoodText)
 	{
-		WoodText->SetText(FText::FromString(FString::Printf(TEXT("Wood: %d"), Wood)));
+		WoodText->SetText(FText::FromString(FString::Printf(TEXT("Wood: %d    Rock: %d"), Wood, Rock)));
 	}
 
 	if (ChoiceBox)

@@ -9,7 +9,9 @@
 class UArrowComponent;
 class USceneComponent;
 class UStaticMeshComponent;
+class UStaticMesh;
 class ACaveboundBaseEnemy;
+class ACaveboundGameMode;
 
 // Generic turret
 UCLASS(Blueprintable)
@@ -44,11 +46,24 @@ public:
 
 	bool IsDestroyed() const { return Health <= 0.f; }
 
+	int32 GetUpgradeLevel() const { return UpgradeLevel; }
+	int32 GetMaxUpgradeLevel() const { return 2; }
+	int32 GetNextUpgradeRockCost() const;
+	int32 GetNextUpgradeWoodCost() const;
+	int32 GetRepairCost() const;
+	void GetDisarmRefund(int32& OutWood, int32& OutRock) const;
+	bool TryUpgrade(ACaveboundGameMode* GameMode);
+	bool TryRepair(ACaveboundGameMode* GameMode);
+
 protected:
 	virtual void PlayDamageFlash();
 	virtual void OnDestroyedByDamage();
 
 	ACaveboundBaseEnemy* FindNearestEnemy() const;
+	void RememberBaseStats();
+	void UseTowerMeshes(UStaticMesh* Level1, UStaticMesh* Level2, UStaticMesh* Level3, UStaticMesh* Fallback);
+	void ApplyUpgradeMesh();
+	virtual void ApplyLevelBonus();
 	void RememberFirePoint();
 	void GetShotStart(FVector& shotLocation, FVector& shotForward) const;
 	float GetYawErrorToEnemy(const ACaveboundBaseEnemy* enemy) const;
@@ -112,4 +127,16 @@ protected:
 	FTimerHandle HitFlashTimer;
 
 	float FireTime = 0.f;
+
+	// 0 is the tower you place. 1 and 2 are the two upgrades.
+	int32 UpgradeLevel = 0;
+	float BaseMaxHealth = 150.f;
+	float BaseFireInterval = 1.f;
+	float BaseProjectileDamage = 10.f;
+	int32 WoodSpent = 0;
+	int32 RockSpent = 0;
+	bool bBaseStatsSaved = false;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMesh>> UpgradeMeshes;
 };

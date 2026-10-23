@@ -9,7 +9,10 @@ class UInputAction;
 class UUserWidget;
 class UCaveboundBuildMenu;
 class UCaveboundBuildPrompt;
+class UCaveboundDefenderMenu;
+class UCaveboundResourceReadout;
 class UMaterialInterface;
+class ACaveboundTurret;
 
 /**
  * Reads the mouse and tells the Character where to walk.
@@ -60,6 +63,10 @@ public:
 	bool PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<AActor> DefenderClass);
 
 	void CloseBuildMenu();
+	void CloseDefenderMenu();
+
+	// 0 upgrade, 1 repair, 2 disarm. Failure is filled when the action cannot be done.
+	bool UseDefenderAction(AActor* Slot, int32 Action, FString& OutFailure);
 
 	// C++ entry for Start Wave (HUD button + Enter key). Avoids broken BP casts after hotreload.
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
@@ -90,10 +97,14 @@ protected:
 	bool IsMouseButtonHeld(const FKey& Button) const;
 
 	void HandleBuildKey();
+	void HandleDefenderKey();
 	void StripSlotPlaceKeys();
 	void OpenBuildMenu(AActor* Slot);
+	void OpenDefenderMenu(AActor* Slot);
 	void UpdateBuildSlotPresentation();
 	void CollectInteractableSlots(TArray<AActor*>& OutSlots, AActor*& OutClosest) const;
+	void CollectOccupiedSlots(TArray<AActor*>& OutSlots, AActor*& OutClosest) const;
+	ACaveboundTurret* GetDefenderOnSlot(AActor* Slot) const;
 	void SetSlotHighlighted(AActor* Slot, bool bHighlighted);
 	bool GetSlotScreenPosition(const AActor* Slot, float Height, FVector2D& OutScreenPosition) const;
 	AActor* FindBuildSlotForMenu() const;
@@ -125,7 +136,13 @@ protected:
 	TObjectPtr<UCaveboundBuildMenu> BuildMenu;
 
 	UPROPERTY()
+	TObjectPtr<UCaveboundDefenderMenu> DefenderMenu;
+
+	UPROPERTY()
 	TObjectPtr<UCaveboundBuildPrompt> BuildPrompt;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundResourceReadout> RockReadout;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> SlotHighlightMaterial;

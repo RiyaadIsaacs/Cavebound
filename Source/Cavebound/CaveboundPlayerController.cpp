@@ -2,8 +2,11 @@
 #include "CaveboundBuildMenu.h"
 #include "CaveboundBuildPrompt.h"
 #include "CaveboundCharacter.h"
+#include "CaveboundDefenderMenu.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundHoverHealth.h"
+#include "CaveboundResourceReadout.h"
+#include "CaveboundRockDeposit.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
 #include "Components/InputComponent.h"
@@ -85,6 +88,16 @@ void ACaveboundPlayerController::ShowHUD()
 	{
 		HUDWidget->AddToViewport(0);
 		ConfigureHudClickThrough();
+	}
+
+	if (!RockReadout)
+	{
+		RockReadout = CreateWidget<UCaveboundResourceReadout>(this, UCaveboundResourceReadout::StaticClass());
+		if (RockReadout)
+		{
+			RockReadout->AddToViewport(1);
+			RockReadout->Refresh();
+		}
 	}
 }
 
@@ -269,6 +282,7 @@ void ACaveboundPlayerController::SetupInputComponent()
 		TabBinding.bExecuteWhenPaused = true;
 
 		InputComponent->BindKey(EKeys::B, IE_Pressed, this, &ACaveboundPlayerController::HandleBuildKey);
+		InputComponent->BindKey(EKeys::F, IE_Pressed, this, &ACaveboundPlayerController::HandleDefenderKey);
 		InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACaveboundPlayerController::RequestStartRound);
 	}
 }
@@ -298,6 +312,10 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 
 	StripSlotPlaceKeys();
 	UpdateBuildSlotPresentation();
+	if (RockReadout)
+	{
+		RockReadout->Refresh();
+	}
 
 	if (bPauseMenuOpen)
 	{
@@ -318,6 +336,10 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 		if (BuildMenu && BuildMenu->IsInViewport() && !BuildMenu->IsPointerInsideMenu())
 		{
 			CloseBuildMenu();
+		}
+		if (DefenderMenu && DefenderMenu->IsInViewport() && !DefenderMenu->IsPointerInsideMenu())
+		{
+			CloseDefenderMenu();
 		}
 		OnClickMove();
 	}
@@ -425,7 +447,10 @@ bool ACaveboundPlayerController::IsPointerOverInteractiveUI() const
 
 void ACaveboundPlayerController::OnClickMove()
 {
-	if (bPauseMenuOpen || (BuildMenu && BuildMenu->IsInViewport()) || IsPointerOverInteractiveUI())
+	if (bPauseMenuOpen
+		|| (BuildMenu && BuildMenu->IsInViewport())
+		|| (DefenderMenu && DefenderMenu->IsInViewport())
+		|| IsPointerOverInteractiveUI())
 	{
 		return;
 	}
@@ -457,6 +482,10 @@ void ACaveboundPlayerController::OnClickMove()
 		if (ACaveboundTree* Tree = Cast<ACaveboundTree>(Hit.GetActor()))
 		{
 			PlayerCharacter->SetTreeTarget(Tree);
+		}
+		else if (ACaveboundRockDeposit* Rock = Cast<ACaveboundRockDeposit>(Hit.GetActor()))
+		{
+			PlayerCharacter->SetRockTarget(Rock);
 		}
 		else
 		{
@@ -562,7 +591,7 @@ void ACaveboundPlayerController::StripSlotPlaceKeys()
 	auto ShouldRemove = [this](const FInputKeyBinding& Binding)
 	{
 		const bool bPlaceKey = Binding.Chord.Key == EKeys::F || Binding.Chord.Key == EKeys::B;
-		const bool bPicker = Binding.Chord.Key == EKeys::B && Binding.KeyDelegate.IsBoundToObject(this);
+		const bool bPicker = (Binding.Chord.Key == EKeys::B || Binding.Chord.Key == EKeys::F) && Binding.KeyDelegate.IsBoundToObject(this);
 		return bPlaceKey && !bPicker;
 	};
 
@@ -604,9 +633,41 @@ void ACaveboundPlayerController::HandleBuildKey()
 		return;
 	}
 
+	if (DefenderMenu && DefenderMenu->IsInViewport())
+	{
+		CloseDefenderMenu();
+	}
+
 	if (AActor* Slot = FindBuildSlotForMenu())
 	{
 		OpenBuildMenu(Slot);
+	}
+}
+
+void ACaveboundPlayerController::HandleDefenderKey()
+{
+	if (bPauseMenuOpen)
+	{
+		return;
+	}
+
+	if (DefenderMenu && DefenderMenu->IsInViewport())
+	{
+		CloseDefenderMenu();
+		return;
+	}
+
+	if (BuildMenu && BuildMenu->IsInViewport())
+	{
+		CloseBuildMenu();
+	}
+
+	TArray<AActor*> OccupiedSlots;
+	AActor* Closest = nullptr;
+	CollectOccupiedSlots(OccupiedSlots, Closest);
+	if (Closest)
+	{
+		OpenDefenderMenu(Closest);
 	}
 }
 
@@ -657,6 +718,187 @@ void ACaveboundPlayerController::CloseBuildMenu()
 	}
 
 	ApplyGameplayInputMode();
+}
+
+void ACaveboundPlayerController::OpenDefenderMenu(AActor* Slot)
+{
+	ACaveboundTurret* Defender = GetDefenderOnSlot(Slot);
+	if (!Slot || !Defender || Defender->IsDestroyed())
+	{
+		return;
+	}
+
+	if (BuildMenu && BuildMenu->IsInViewport())
+	{
+		CloseBuildMenu();
+	}
+
+	if (!DefenderMenu)
+	{
+		DefenderMenu = CreateWidget<UCaveboundDefenderMenu>(this, UCaveboundDefenderMenu::StaticClass());
+	}
+
+	if (!DefenderMenu)
+	{
+		return;
+	}
+
+	MenuSlot = Slot;
+	DefenderMenu->OpenForDefender(Slot, Defender);
+	if (BuildPrompt)
+	{
+		BuildPrompt->SetHoverVisible(false);
+	}
+	if (!DefenderMenu->IsInViewport())
+	{
+		DefenderMenu->AddToViewport(15);
+	}
+
+	FVector2D ScreenPosition;
+	if (GetSlotScreenPosition(Slot, 200.f, ScreenPosition))
+	{
+		DefenderMenu->SetHoverScreenPosition(ScreenPosition);
+		DefenderMenu->SetHoverVisible(true);
+	}
+
+	ApplyMenuInputMode();
+}
+
+void ACaveboundPlayerController::CloseDefenderMenu()
+{
+	MenuSlot = nullptr;
+	if (DefenderMenu && DefenderMenu->IsInViewport())
+	{
+		DefenderMenu->RemoveFromParent();
+	}
+
+	ApplyGameplayInputMode();
+}
+
+ACaveboundTurret* ACaveboundPlayerController::GetDefenderOnSlot(AActor* Slot) const
+{
+	if (!Slot)
+	{
+		return nullptr;
+	}
+
+	const FObjectProperty* DefenderActor = FindFProperty<FObjectProperty>(Slot->GetClass(), TEXT("OccupyingDefender"));
+	if (!DefenderActor)
+	{
+		return nullptr;
+	}
+
+	return Cast<ACaveboundTurret>(DefenderActor->GetObjectPropertyValue_InContainer(Slot));
+}
+
+void ACaveboundPlayerController::CollectOccupiedSlots(TArray<AActor*>& OutSlots, AActor*& OutClosest) const
+{
+	OutSlots.Reset();
+	OutClosest = nullptr;
+
+	UWorld* World = GetWorld();
+	UClass* SlotClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_BuildSlot.BP_BuildSlot_C"));
+	if (!World || !SlotClass)
+	{
+		return;
+	}
+
+	TArray<AActor*> Slots;
+	UGameplayStatics::GetAllActorsOfClass(World, SlotClass, Slots);
+
+	const APawn* PlayerPawn = GetPawn();
+	float BestDistanceSq = TNumericLimits<float>::Max();
+	for (AActor* Slot : Slots)
+	{
+		if (!Slot)
+		{
+			continue;
+		}
+
+		const FBoolProperty* Nearby = FindFProperty<FBoolProperty>(Slot->GetClass(), TEXT("PlayerNearby"));
+		const FBoolProperty* Occupied = FindFProperty<FBoolProperty>(Slot->GetClass(), TEXT("IsOccupied"));
+		if (!Nearby || !Nearby->GetPropertyValue_InContainer(Slot))
+		{
+			continue;
+		}
+		if (!Occupied || !Occupied->GetPropertyValue_InContainer(Slot))
+		{
+			continue;
+		}
+
+		ACaveboundTurret* Defender = GetDefenderOnSlot(Slot);
+		if (!Defender || Defender->IsDestroyed())
+		{
+			continue;
+		}
+
+		OutSlots.Add(Slot);
+
+		const float DistanceSq = PlayerPawn
+			? FVector::DistSquared(PlayerPawn->GetActorLocation(), Slot->GetActorLocation())
+			: 0.f;
+		if (DistanceSq < BestDistanceSq)
+		{
+			BestDistanceSq = DistanceSq;
+			OutClosest = Slot;
+		}
+	}
+}
+
+bool ACaveboundPlayerController::UseDefenderAction(AActor* Slot, int32 Action, FString& OutFailure)
+{
+	OutFailure.Reset();
+	ACaveboundTurret* Defender = GetDefenderOnSlot(Slot);
+	UWorld* World = GetWorld();
+	ACaveboundGameMode* GameMode = World ? World->GetAuthGameMode<ACaveboundGameMode>() : nullptr;
+	if (!Defender || !GameMode || Defender->IsDestroyed())
+	{
+		OutFailure = TEXT("Defender is gone.");
+		return false;
+	}
+
+	if (Action == 0)
+	{
+		if (Defender->GetUpgradeLevel() >= Defender->GetMaxUpgradeLevel())
+		{
+			OutFailure = TEXT("Already fully upgraded.");
+			return false;
+		}
+		if (GameMode->GetRock() < Defender->GetNextUpgradeRockCost() || GameMode->GetWood() < Defender->GetNextUpgradeWoodCost())
+		{
+			OutFailure = TEXT("Not enough resources.");
+			return false;
+		}
+		if (!Defender->TryUpgrade(GameMode))
+		{
+			OutFailure = TEXT("Not enough resources.");
+			return false;
+		}
+		return true;
+	}
+
+	if (Action == 1)
+	{
+		if (Defender->GetRepairCost() <= 0)
+		{
+			OutFailure = TEXT("Already at full health.");
+			return false;
+		}
+		if (!Defender->TryRepair(GameMode))
+		{
+			OutFailure = TEXT("Not enough wood.");
+			return false;
+		}
+		return true;
+	}
+
+	int32 refundWood = 0;
+	int32 refundRock = 0;
+	Defender->GetDisarmRefund(refundWood, refundRock);
+	GameMode->GiveWood(refundWood);
+	GameMode->GiveRock(refundRock);
+	Defender->Destroy();
+	return true;
 }
 
 void ACaveboundPlayerController::CollectInteractableSlots(TArray<AActor*>& OutSlots, AActor*& OutClosest) const
@@ -794,8 +1036,9 @@ void ACaveboundPlayerController::UpdateBuildSlotPresentation()
 		}
 	}
 
-	const bool bMenuOpen = BuildMenu && BuildMenu->IsInViewport();
-	if (bMenuOpen)
+	const bool bBuildMenuOpen = BuildMenu && BuildMenu->IsInViewport();
+	const bool bDefenderMenuOpen = DefenderMenu && DefenderMenu->IsInViewport();
+	if (bBuildMenuOpen || bDefenderMenuOpen)
 	{
 		if (BuildPrompt)
 		{
@@ -803,15 +1046,45 @@ void ACaveboundPlayerController::UpdateBuildSlotPresentation()
 		}
 
 		FVector2D ScreenPosition;
-		if (GetSlotScreenPosition(MenuSlot.Get(), 210.f, ScreenPosition))
+		if (bBuildMenuOpen && GetSlotScreenPosition(MenuSlot.Get(), 210.f, ScreenPosition))
 		{
 			BuildMenu->SetHoverScreenPosition(ScreenPosition);
 			BuildMenu->SetHoverVisible(true);
 		}
+		else if (bDefenderMenuOpen && GetSlotScreenPosition(MenuSlot.Get(), 210.f, ScreenPosition))
+		{
+			DefenderMenu->SetHoverScreenPosition(ScreenPosition);
+			DefenderMenu->SetHoverVisible(true);
+		}
 		return;
 	}
 
-	if (!Closest)
+	TArray<AActor*> OccupiedSlots;
+	AActor* OccupiedClosest = nullptr;
+	CollectOccupiedSlots(OccupiedSlots, OccupiedClosest);
+
+	AActor* PromptSlot = Closest;
+	FString PromptKey = TEXT("B");
+	const APawn* PlayerPawn = GetPawn();
+	if (OccupiedClosest && PlayerPawn)
+	{
+		const float occupiedDistance = FVector::DistSquared(PlayerPawn->GetActorLocation(), OccupiedClosest->GetActorLocation());
+		const float emptyDistance = Closest
+			? FVector::DistSquared(PlayerPawn->GetActorLocation(), Closest->GetActorLocation())
+			: TNumericLimits<float>::Max();
+		if (occupiedDistance <= emptyDistance)
+		{
+			PromptSlot = OccupiedClosest;
+			PromptKey = TEXT("F");
+		}
+	}
+	else if (OccupiedClosest)
+	{
+		PromptSlot = OccupiedClosest;
+		PromptKey = TEXT("F");
+	}
+
+	if (!PromptSlot)
 	{
 		if (BuildPrompt)
 		{
@@ -834,8 +1107,10 @@ void ACaveboundPlayerController::UpdateBuildSlotPresentation()
 		return;
 	}
 
+	BuildPrompt->SetPromptKey(PromptKey);
+
 	FVector2D ScreenPosition;
-	if (GetSlotScreenPosition(Closest, 150.f, ScreenPosition))
+	if (GetSlotScreenPosition(PromptSlot, 150.f, ScreenPosition))
 	{
 		BuildPrompt->SetHoverScreenPosition(ScreenPosition);
 		BuildPrompt->SetHoverVisible(true);

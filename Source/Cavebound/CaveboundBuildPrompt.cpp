@@ -27,6 +27,7 @@ void UCaveboundBuildPrompt::NativeOnInitialized()
 	Keycap->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("PromptLabel"));
+	PromptLabel = Label;
 	Label->SetText(FText::FromString(TEXT("B")));
 	Label->SetColorAndOpacity(FSlateColor(FLinearColor(0.85f, 1.f, 0.75f, 1.f)));
 	Label->SetJustification(ETextJustify::Center);
@@ -41,6 +42,14 @@ void UCaveboundBuildPrompt::NativeOnInitialized()
 		PanelSlot->SetAnchors(FAnchors(0.f, 0.f));
 		PanelSlot->SetAlignment(FVector2D(0.5f, 1.f));
 		PanelSlot->SetAutoSize(true);
+	}
+}
+
+void UCaveboundBuildPrompt::SetPromptKey(const FString& Key)
+{
+	if (PromptLabel)
+	{
+		PromptLabel->SetText(FText::FromString(Key));
 	}
 }
 

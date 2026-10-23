@@ -1,4 +1,4 @@
-#include "CaveboundSnare.h"
+﻿#include "CaveboundSnare.h"
 
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
@@ -52,13 +52,47 @@ void ACaveboundSnare::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ACaveboundSnare::DropCatch()
 {
-	if (ACaveboundBaseEnemy* heldEnemy = TrappedEnemy.Get())
+	for (FCaveboundSnareHold& hold : Holds)
 	{
-		heldEnemy->ReleaseSnare(this);
+		if (ACaveboundBaseEnemy* heldEnemy = hold.Enemy.Get())
+		{
+			heldEnemy->ReleaseSnare(this);
+		}
+		ClearHold(hold);
 	}
+	Holds.Empty();
+}
 
-	TrappedEnemy = nullptr;
-	ClearRope();
+void ACaveboundSnare::ReleaseEnemy(ACaveboundBaseEnemy* Enemy)
+{
+	for (int32 index = Holds.Num() - 1; index >= 0; --index)
+	{
+		if (Holds[index].Enemy.Get() != Enemy)
+		{
+			continue;
+		}
+
+		if (Enemy)
+		{
+			Enemy->ReleaseSnare(this);
+		}
+		ClearHold(Holds[index]);
+		Holds.RemoveAt(index);
+	}
+}
+
+void ACaveboundSnare::ApplyLevelBonus()
+{
+	Super::ApplyLevelBonus();
+
+	const float levelScale = 1.f + UpgradeLevel * 0.2f;
+	const float postRadius = 28.f * levelScale;
+	PostHeight = 700.f * levelScale;
+	if (VisualMesh)
+	{
+		VisualMesh->SetRelativeScale3D(FVector(postRadius / 50.f, postRadius / 50.f, PostHeight / 100.f));
+		VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, PostHeight * 0.5f));
+	}
 }
 
 void ACaveboundSnare::Tick(float DeltaTime)
@@ -70,16 +104,18 @@ void ACaveboundSnare::Tick(float DeltaTime)
 		return;
 	}
 
-	if (ACaveboundBaseEnemy* heldEnemy = TrappedEnemy.Get())
+	for (int32 index = Holds.Num() - 1; index >= 0; --index)
 	{
-		if (heldEnemy->IsDead())
+		ACaveboundBaseEnemy* heldEnemy = Holds[index].Enemy.Get();
+		if (!heldEnemy || heldEnemy->IsDead() || !heldEnemy->IsSnaredBy(this))
 		{
-			DropCatch();
+			if (heldEnemy && !heldEnemy->IsDead())
+			{
+				heldEnemy->ReleaseSnare(this);
+			}
+			ClearHold(Holds[index]);
+			Holds.RemoveAt(index);
 		}
-	}
-	else if (RopePieces.Num() > 0)
-	{
-		ClearRope();
 	}
 
 	if (!IsCombatRound())
@@ -104,29 +140,32 @@ bool ACaveboundSnare::IsCombatRound() const
 
 void ACaveboundSnare::UpdateSnare()
 {
-	if (ACaveboundBaseEnemy* heldEnemy = TrappedEnemy.Get())
+	while (Holds.Num() < GetCatchLimit())
 	{
-		if (heldEnemy->IsSnaredBy(this) && !heldEnemy->IsDead())
+		ACaveboundBaseEnemy* closestEnemy = FindSnareTarget();
+		if (!closestEnemy || !closestEnemy->TrySnare(this, TrapDuration))
 		{
-			if (RopePieces.Num() == 0)
-			{
-				ShowRope(heldEnemy);
-			}
-			return;
+			break;
 		}
 
-		TrappedEnemy = nullptr;
-		ClearRope();
+		FCaveboundSnareHold hold;
+		hold.Enemy = closestEnemy;
+		ShowRope(hold);
+		Holds.Add(hold);
 	}
+}
 
-	if (ACaveboundBaseEnemy* closestEnemy = FindSnareTarget())
+bool ACaveboundSnare::IsHolding(const ACaveboundBaseEnemy* Enemy) const
+{
+	for (const FCaveboundSnareHold& hold : Holds)
 	{
-		if (closestEnemy->TrySnare(this, TrapDuration))
+		if (hold.Enemy.Get() == Enemy)
 		{
-			TrappedEnemy = closestEnemy;
-			ShowRope(closestEnemy);
+			return true;
 		}
 	}
+
+	return false;
 }
 
 ACaveboundBaseEnemy* ACaveboundSnare::FindSnareTarget() const
@@ -147,7 +186,7 @@ ACaveboundBaseEnemy* ACaveboundSnare::FindSnareTarget() const
 	for (AActor* foundActor : allEnemies)
 	{
 		ACaveboundBaseEnemy* enemy = Cast<ACaveboundBaseEnemy>(foundActor);
-		if (!enemy || !enemy->CanBeSnared())
+		if (!enemy || !enemy->CanBeSnared() || IsHolding(enemy))
 		{
 			continue;
 		}
@@ -163,35 +202,44 @@ ACaveboundBaseEnemy* ACaveboundSnare::FindSnareTarget() const
 	return closestEnemy;
 }
 
-void ACaveboundSnare::ClearRope()
+void ACaveboundSnare::ClearHold(FCaveboundSnareHold& Hold)
 {
-	for (USplineMeshComponent* ropePiece : RopePieces)
+	for (USplineMeshComponent* ropePiece : Hold.Pieces)
 	{
 		if (ropePiece)
 		{
 			ropePiece->DestroyComponent();
 		}
 	}
-	RopePieces.Empty();
+	Hold.Pieces.Empty();
 
-	if (RopeSpline)
+	if (Hold.Spline)
 	{
-		RopeSpline->DestroyComponent();
-		RopeSpline = nullptr;
+		Hold.Spline->DestroyComponent();
+		Hold.Spline = nullptr;
 	}
 }
 
-void ACaveboundSnare::ShowRope(ACaveboundBaseEnemy* CaughtEnemy)
+void ACaveboundSnare::ClearAllRopes()
 {
-	ClearRope();
+	for (FCaveboundSnareHold& hold : Holds)
+	{
+		ClearHold(hold);
+	}
+}
+
+void ACaveboundSnare::ShowRope(FCaveboundSnareHold& Hold)
+{
+	ClearHold(Hold);
+	ACaveboundBaseEnemy* CaughtEnemy = Hold.Enemy.Get();
 	if (!CaughtEnemy || !RopeMesh)
 	{
 		return;
 	}
 
-	RopeSpline = NewObject<USplineComponent>(this);
-	RopeSpline->SetMobility(EComponentMobility::Movable);
-	RopeSpline->RegisterComponent();
+	Hold.Spline = NewObject<USplineComponent>(this);
+	Hold.Spline->SetMobility(EComponentMobility::Movable);
+	Hold.Spline->RegisterComponent();
 
 	const FVector postTop = GetActorLocation() + FVector(0.f, 0.f, PostHeight);
 	const FVector enemyFeet = CaughtEnemy->GetActorLocation();
@@ -202,7 +250,6 @@ void ACaveboundSnare::ShowRope(ACaveboundBaseEnemy* CaughtEnemy)
 	ropePoints.Add(FMath::Lerp(postTop, aboveEnemy, 0.5f));
 	ropePoints.Add(aboveEnemy);
 
-	// Spline wraps around enemy
 	const int wraps = 3;
 	const int stepsPerWrap = 8;
 	const float wrapRadius = 80.f;
@@ -214,28 +261,27 @@ void ACaveboundSnare::ShowRope(ACaveboundBaseEnemy* CaughtEnemy)
 		const float alongWrap = static_cast<float>(step) / static_cast<float>(wrapSteps);
 		const float angle = alongWrap * wraps * 2.f * PI;
 		const float heightOnBody = FMath::Lerp(topOfWrap, bottomOfWrap, alongWrap);
-		const FVector aroundBody = enemyFeet + FVector( FMath::Cos(angle) * wrapRadius,	FMath::Sin(angle) * wrapRadius,	heightOnBody);
+		const FVector aroundBody = enemyFeet + FVector(FMath::Cos(angle) * wrapRadius, FMath::Sin(angle) * wrapRadius, heightOnBody);
 		ropePoints.Add(aroundBody);
 	}
 
-	RopeSpline->SetSplinePoints(ropePoints, ESplineCoordinateSpace::World, false);
+	Hold.Spline->SetSplinePoints(ropePoints, ESplineCoordinateSpace::World, false);
 	for (int pointIndex = 0; pointIndex < ropePoints.Num(); ++pointIndex)
 	{
-		RopeSpline->SetSplinePointType(pointIndex, ESplinePointType::Curve, false);
+		Hold.Spline->SetSplinePointType(pointIndex, ESplinePointType::Curve, false);
 	}
-	RopeSpline->UpdateSpline();
+	Hold.Spline->UpdateSpline();
 
-	// Builds mesh along spline
 	const float ropeThickness = 0.08f;
-	const int pointCount = RopeSpline->GetNumberOfSplinePoints();
+	const int pointCount = Hold.Spline->GetNumberOfSplinePoints();
 	for (int pointIndex = 0; pointIndex < pointCount - 1; ++pointIndex)
 	{
 		FVector startPoint = FVector::ZeroVector;
 		FVector startDirection = FVector::ZeroVector;
 		FVector endPoint = FVector::ZeroVector;
 		FVector endDirection = FVector::ZeroVector;
-		RopeSpline->GetLocationAndTangentAtSplinePoint(pointIndex, startPoint, startDirection, ESplineCoordinateSpace::World);
-		RopeSpline->GetLocationAndTangentAtSplinePoint(pointIndex + 1, endPoint, endDirection, ESplineCoordinateSpace::World);
+		Hold.Spline->GetLocationAndTangentAtSplinePoint(pointIndex, startPoint, startDirection, ESplineCoordinateSpace::World);
+		Hold.Spline->GetLocationAndTangentAtSplinePoint(pointIndex + 1, endPoint, endDirection, ESplineCoordinateSpace::World);
 
 		USplineMeshComponent* ropePiece = NewObject<USplineMeshComponent>(this);
 		ropePiece->SetMobility(EComponentMobility::Movable);
@@ -251,6 +297,6 @@ void ACaveboundSnare::ShowRope(ACaveboundBaseEnemy* CaughtEnemy)
 			ropePiece->SetMaterial(0, RopeMaterial);
 		}
 		ropePiece->RegisterComponent();
-		RopePieces.Add(ropePiece);
+		Hold.Pieces.Add(ropePiece);
 	}
 }

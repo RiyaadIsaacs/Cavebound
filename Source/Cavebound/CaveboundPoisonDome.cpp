@@ -67,11 +67,15 @@ ACaveboundPoisonDome::ACaveboundPoisonDome()
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> towerMesh(TEXT("/Game/Assets/Models/Towers/SM_PoisonTower_LVL4.SM_PoisonTower_LVL4"));
-	if (towerMesh.Succeeded())
-	{
-		VisualMesh->SetStaticMesh(towerMesh.Object);
-	}
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level1Mesh(TEXT("/Game/Assets/Models/Towers/SM_PoisonTower_LVL1.SM_PoisonTower_LVL1"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level2Mesh(TEXT("/Game/Assets/Models/Towers/SM_PoisonTower_LVL2.SM_PoisonTower_LVL2"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level3Mesh(TEXT("/Game/Assets/Models/Towers/SM_PoisonTower_LVL3.SM_PoisonTower_LVL3"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> fallbackMesh(TEXT("/Game/Assets/Models/Towers/SM_PoisonTower_LVL4.SM_PoisonTower_LVL4"));
+	UseTowerMeshes(
+		level1Mesh.Succeeded() ? level1Mesh.Object : nullptr,
+		level2Mesh.Succeeded() ? level2Mesh.Object : nullptr,
+		level3Mesh.Succeeded() ? level3Mesh.Object : nullptr,
+		fallbackMesh.Succeeded() ? fallbackMesh.Object : nullptr);
 
 	// Transparent dome
 	PoisonCloud = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PoisonCloud"));
@@ -100,8 +104,15 @@ void ACaveboundPoisonDome::OnConstruction(const FTransform& Transform)
 
 void ACaveboundPoisonDome::BeginPlay()
 {
+	BasePoisonDamage = PoisonDamagePerSecond;
 	Super::BeginPlay();
 	UpdatePoisonCloud();
+}
+
+void ACaveboundPoisonDome::ApplyLevelBonus()
+{
+	Super::ApplyLevelBonus();
+	PoisonDamagePerSecond = BasePoisonDamage * (1.f + UpgradeLevel * 0.4f);
 }
 
 void ACaveboundPoisonDome::PlayDamageFlash()

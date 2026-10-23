@@ -100,7 +100,7 @@ void ACaveboundBaseEnemy::ApplyDamage(float Amount)
 		// Tell the snare to drop the rope, and remember this spot so a pad cannot appear on the corpse.
 		if (ACaveboundSnare* snare = Cast<ACaveboundSnare>(SnareSource.Get()))
 		{
-			snare->DropCatch();
+			snare->ReleaseEnemy(this);
 		}
 
 		if (UWorld* world = GetWorld())

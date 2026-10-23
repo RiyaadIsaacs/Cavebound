@@ -10,6 +10,21 @@ class UStaticMesh;
 class UMaterialInstanceDynamic;
 class ACaveboundBaseEnemy;
 
+USTRUCT()
+struct FCaveboundSnareHold
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TWeakObjectPtr<ACaveboundBaseEnemy> Enemy;
+
+	UPROPERTY()
+	TObjectPtr<USplineComponent> Spline;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USplineMeshComponent>> Pieces;
+};
+
 //Grabs enemies and prevents them from acting
 UCLASS(Blueprintable)
 class CAVEBOUND_API ACaveboundSnare : public ACaveboundTurret
@@ -25,6 +40,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	void DropCatch();
+	void ReleaseEnemy(ACaveboundBaseEnemy* Enemy);
 
 protected:
 	// Range
@@ -35,18 +51,18 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Snare")
 	float TrapDuration = 10.f;
 
-	// Held enemy
-	TWeakObjectPtr<ACaveboundBaseEnemy> TrappedEnemy;
+	// How many enemies this snare can hold. Upgrades raise this.
+	int32 GetCatchLimit() const { return 1 + UpgradeLevel; }
+
+	virtual void ApplyLevelBonus() override;
+
+	// Held enemies and the rope wrapped around each one.
+	UPROPERTY()
+	TArray<FCaveboundSnareHold> Holds;
 
 	float PostHeight = 700.f;
 
 	// The path the rope follows.
-	UPROPERTY()
-	TObjectPtr<USplineComponent> RopeSpline;
-
-	UPROPERTY()
-	TArray<TObjectPtr<USplineMeshComponent>> RopePieces;
-
 	UPROPERTY()
 	TObjectPtr<UStaticMesh> RopeMesh;
 
@@ -56,6 +72,8 @@ protected:
 	bool IsCombatRound() const;
 	void UpdateSnare();
 	ACaveboundBaseEnemy* FindSnareTarget() const;
-	void ShowRope(ACaveboundBaseEnemy* CaughtEnemy);
-	void ClearRope();
+	bool IsHolding(const ACaveboundBaseEnemy* Enemy) const;
+	void ShowRope(FCaveboundSnareHold& Hold);
+	void ClearHold(FCaveboundSnareHold& Hold);
+	void ClearAllRopes();
 };

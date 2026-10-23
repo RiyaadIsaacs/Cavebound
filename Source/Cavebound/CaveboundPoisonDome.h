@@ -40,6 +40,8 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Dome")
 	float PoisonTickInterval = 0.5f;
 
+	float BasePoisonDamage = 8.f;
+
 	// Time left before each enemy inside takes the next poison hit.
 	TMap<TWeakObjectPtr<ACaveboundBaseEnemy>, float> PoisonTimeRemaining;
 
@@ -51,6 +53,7 @@ protected:
 	TObjectPtr<UMaterialInstanceDynamic> GreenMaterial;
 
 	virtual void PlayDamageFlash() override;
+	virtual void ApplyLevelBonus() override;
 
 	bool IsCombatRound() const;
 	void UpdateDome(float DeltaTime);

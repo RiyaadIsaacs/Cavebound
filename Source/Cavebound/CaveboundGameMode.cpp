@@ -5,6 +5,8 @@
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundLongRangeEnemy.h"
 #include "CaveboundPlayerController.h"
+#include "CaveboundRockDeposit.h"
+#include "CaveboundRockField.h"
 #include "CaveboundTerrainExpansion.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
@@ -64,6 +66,62 @@ void ACaveboundGameMode::EnsureGameplayReady()
 	EnsureTree();
 	EnsureEnemySpawnConfig();
 	CollectPathSplines();
+	EnsureRockField();
+}
+
+void ACaveboundGameMode::EnsureRockField()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UClass* TerrainClass = LoadClass<AActor>(
+		nullptr,
+		TEXT("/Game/Blueprints/BP_ProceduralTerrain.BP_ProceduralTerrain_C"));
+	if (!TerrainClass)
+	{
+		return;
+	}
+
+	TArray<AActor*> Terrains;
+	UGameplayStatics::GetAllActorsOfClass(World, TerrainClass, Terrains);
+	for (AActor* Terrain : Terrains)
+	{
+		if (!Terrain || Terrain->FindComponentByClass<UCaveboundRockField>())
+		{
+			continue;
+		}
+
+		UCaveboundRockField* Field = NewObject<UCaveboundRockField>(Terrain, TEXT("RockField"));
+		if (!Field)
+		{
+			continue;
+		}
+
+		Field->RegisterComponent();
+		Terrain->AddInstanceComponent(Field);
+	}
+}
+
+void ACaveboundGameMode::NotifyRockDepositsWaveEnded()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	TArray<AActor*> deposits;
+	UGameplayStatics::GetAllActorsOfClass(World, ACaveboundRockDeposit::StaticClass(), deposits);
+	for (AActor* found : deposits)
+	{
+		if (ACaveboundRockDeposit* deposit = Cast<ACaveboundRockDeposit>(found))
+		{
+			deposit->OnWaveEnded();
+		}
+	}
 }
 
 void ACaveboundGameMode::EnsureEnemySpawnConfig()
@@ -611,6 +669,7 @@ void ACaveboundGameMode::EndRound()
 	EnemiesAliveThisRound = 0;
 	EnemiesToSpawnThisRound = MaxEnemiesPerRound;
 	RoundState = ECaveboundRoundState::Idle;
+	NotifyRockDepositsWaveEnded();
 
 	// Expand after leaving Combat and off the enemy death call stack
 	if (bExpandBuildSlotsAfterRound && DifficultyScore >= BuildSlotExpandMinDifficulty)
@@ -1009,6 +1068,37 @@ void ACaveboundGameMode::AddWood(int32 Amount)
 	}
 
 	Wood += Amount;
+}
+
+void ACaveboundGameMode::GiveWood(int32 Amount)
+{
+	if (bGameOver || Amount <= 0)
+	{
+		return;
+	}
+
+	Wood += Amount;
+}
+
+void ACaveboundGameMode::GiveRock(int32 Amount)
+{
+	if (bGameOver || Amount <= 0)
+	{
+		return;
+	}
+
+	Rock += Amount;
+}
+
+bool ACaveboundGameMode::UseRock(int32 Amount)
+{
+	if (bGameOver || Amount <= 0 || Rock < Amount)
+	{
+		return false;
+	}
+
+	Rock -= Amount;
+	return true;
 }
 
 int32 ACaveboundGameMode::GetWoodPerHarvest() const
