@@ -6,8 +6,13 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Engine/World.h"
-#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/StaticMesh.h"
 #include "UObject/ConstructorHelpers.h"
+
+namespace
+{
+	constexpr int32 RocksPerHarvest = 5;
+}
 
 ACaveboundRockDeposit::ACaveboundRockDeposit()
 {
@@ -23,20 +28,19 @@ ACaveboundRockDeposit::ACaveboundRockDeposit()
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Block);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> cubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (cubeMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> stoneMesh(
+		TEXT("/Game/Assets/Models/Stones/Stone.Stone"));
+	if (stoneMesh.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(cubeMesh.Object);
+		VisualMesh->SetStaticMesh(stoneMesh.Object);
 	}
-
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> basicMaterial(
-		TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-	if (basicMaterial.Succeeded())
+	else
 	{
-		if (UMaterialInstanceDynamic* rockColor = UMaterialInstanceDynamic::Create(basicMaterial.Object, this))
+		static ConstructorHelpers::FObjectFinder<UStaticMesh> fallbackCube(
+			TEXT("/Engine/BasicShapes/Cube.Cube"));
+		if (fallbackCube.Succeeded())
 		{
-			rockColor->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.45f, 0.42f, 0.38f, 1.f));
-			VisualMesh->SetMaterial(0, rockColor);
+			VisualMesh->SetStaticMesh(fallbackCube.Object);
 		}
 	}
 
@@ -75,15 +79,20 @@ void ACaveboundRockDeposit::RollYield()
 	bHarvesting = false;
 
 	const float size = 0.9f + (RockTotal / 48.f) * 1.4f;
+	const float verticalScale = size * 0.7f;
+	const float meshHalfHeight = VisualMesh && VisualMesh->GetStaticMesh()
+		? VisualMesh->GetStaticMesh()->GetBounds().BoxExtent.Z
+		: 50.f;
+	const float scaledHalfHeight = meshHalfHeight * verticalScale;
 	if (VisualMesh)
 	{
-		VisualMesh->SetRelativeScale3D(FVector(size, size, size * 0.7f));
-		VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, 50.f * size * 0.7f));
+		VisualMesh->SetRelativeScale3D(FVector(size, size, verticalScale));
+		VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, scaledHalfHeight));
 	}
 
 	if (HarvestBar)
 	{
-		HarvestBar->SetRelativeLocation(FVector(0.f, 0.f, 50.f * size * 0.7f + 70.f));
+		HarvestBar->SetRelativeLocation(FVector(0.f, 0.f, scaledHalfHeight + 70.f));
 	}
 
 	HideBar();
@@ -106,13 +115,14 @@ bool ACaveboundRockDeposit::AddHarvestTime(float DeltaTime)
 	}
 
 	TickTime = 0.f;
-	RockRemaining = FMath::Max(0, RockRemaining - 1);
+	const int32 RocksHarvested = FMath::Min(RocksPerHarvest, RockRemaining);
+	RockRemaining = FMath::Max(0, RockRemaining - RocksHarvested);
 
 	if (UWorld* World = GetWorld())
 	{
 		if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
 		{
-			GameMode->GiveRock(1);
+			GameMode->GiveRock(RocksHarvested);
 		}
 	}
 
@@ -181,7 +191,9 @@ void ACaveboundRockDeposit::UpdateBar()
 
 	HarvestBar->SetHiddenInGame(false);
 	const float finished = static_cast<float>(RockTotal - RockRemaining);
-	const float partial = SecondsPerRock > 0.f ? TickTime / SecondsPerRock : 0.f;
+	const float partial = SecondsPerRock > 0.f
+		? (TickTime / SecondsPerRock) * FMath::Min(RocksPerHarvest, RockRemaining)
+		: 0.f;
 	const float progress = RockTotal > 0 ? (finished + partial) / static_cast<float>(RockTotal) : 0.f;
 	HarvestWidget->SetHarvest(RockRemaining, progress);
 }
