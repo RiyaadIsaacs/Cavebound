@@ -80,19 +80,25 @@ void ACaveboundRockDeposit::RollYield()
 
 	const float size = 0.9f + (RockTotal / 48.f) * 1.4f;
 	const float verticalScale = size * 0.7f;
-	const float meshHalfHeight = VisualMesh && VisualMesh->GetStaticMesh()
-		? VisualMesh->GetStaticMesh()->GetBounds().BoxExtent.Z
-		: 50.f;
-	const float scaledHalfHeight = meshHalfHeight * verticalScale;
+	float meshBottom = -50.f;
+	float meshTop = 50.f;
+	if (VisualMesh && VisualMesh->GetStaticMesh())
+	{
+		const FBoxSphereBounds meshBounds = VisualMesh->GetStaticMesh()->GetBounds();
+		meshBottom = meshBounds.Origin.Z - meshBounds.BoxExtent.Z;
+		meshTop = meshBounds.Origin.Z + meshBounds.BoxExtent.Z;
+	}
+	const float meshOffset = -meshBottom * verticalScale;
+	const float barOffset = meshTop * verticalScale + 70.f;
 	if (VisualMesh)
 	{
 		VisualMesh->SetRelativeScale3D(FVector(size, size, verticalScale));
-		VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, scaledHalfHeight));
+		VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, meshOffset));
 	}
 
 	if (HarvestBar)
 	{
-		HarvestBar->SetRelativeLocation(FVector(0.f, 0.f, scaledHalfHeight + 70.f));
+		HarvestBar->SetRelativeLocation(FVector(0.f, 0.f, barOffset));
 	}
 
 	HideBar();

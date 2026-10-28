@@ -1031,6 +1031,26 @@ float ACaveboundGameMode::GetCollectionTimeRemaining() const
 	return FMath::Max(0.f, CollectionDuration);
 }
 
+void ACaveboundGameMode::SkipCollectionCountdown()
+{
+	if (bGameOver || RoundState != ECaveboundRoundState::Collecting)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World || GetCollectionTimeRemaining() <= 5.f)
+	{
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		CollectionTimer,
+		this,
+		&ACaveboundGameMode::BeginCombatPhase,
+		5.f,
+		false);
+}
 bool ACaveboundGameMode::CanCollectWood() const
 {
 	return RoundState == ECaveboundRoundState::Collecting

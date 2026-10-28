@@ -7,6 +7,9 @@
 class UInputMappingContext;
 class UInputAction;
 class UUserWidget;
+class UButton;
+class UCanvasPanelSlot;
+class UCanvasPanel;
 class UCaveboundBuildMenu;
 class UCaveboundBuildPrompt;
 class UCaveboundDefenderMenu;
@@ -85,6 +88,10 @@ protected:
 	TObjectPtr<UInputAction> ClickMoveAction;
 
 	void ShowHUD();
+	void CreateSkipCountdownButton();
+	void UpdateSkipCountdownButton();
+	UFUNCTION()
+	void HandleSkipCountdownClicked();
 	void ShowPauseMenu();
 	void HidePauseMenu();
 	void ApplyGameplayInputMode();
@@ -119,6 +126,18 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> HUDWidget;
+
+	UPROPERTY()
+	TObjectPtr<UCanvasPanel> SkipCountdownCanvas;
+
+	UPROPERTY()
+	TObjectPtr<UButton> SkipCountdownButton;
+
+	UPROPERTY()
+	TObjectPtr<UButton> StartWaveButton;
+
+	UPROPERTY()
+	TObjectPtr<UCanvasPanelSlot> SkipCountdownButtonSlot;
 
 	// Separate from WBP_PlayerHUD so pause can block input without breaking click-to-move
 	UPROPERTY(EditDefaultsOnly, Category = "UI")

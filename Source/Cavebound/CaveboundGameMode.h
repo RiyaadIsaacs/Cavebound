@@ -95,6 +95,7 @@ public:
 	// Seconds left in the collection phase. Returns 0 unless Collecting.
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetCollectionTimeRemaining() const;
+	void SkipCollectionCountdown();
 
 	UFUNCTION(BlueprintPure, Category = "Cavebound")
 	float GetCollectionDuration() const { return CollectionDuration; }

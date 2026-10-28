@@ -17,6 +17,10 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/Widget.h"
 #include "Components/Button.h"
+#include "Components/ButtonSlot.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/TextBlock.h"
 #include "Components/CheckBox.h"
 #include "Components/Slider.h"
 #include "Components/EditableText.h"
@@ -88,6 +92,7 @@ void ACaveboundPlayerController::ShowHUD()
 	{
 		HUDWidget->AddToViewport(0);
 		ConfigureHudClickThrough();
+		CreateSkipCountdownButton();
 	}
 
 	if (!RockReadout)
@@ -98,6 +103,129 @@ void ACaveboundPlayerController::ShowHUD()
 			RockReadout->AddToViewport(1);
 			RockReadout->Refresh();
 		}
+	}
+}
+
+void ACaveboundPlayerController::CreateSkipCountdownButton()
+{
+	if (!HUDWidget || !HUDWidget->WidgetTree || SkipCountdownButton)
+	{
+		return;
+	}
+
+	StartWaveButton = Cast<UButton>(HUDWidget->WidgetTree->FindWidget(FName(TEXT("StartWaveButton"))));
+	if (!StartWaveButton)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CreateSkipCountdownButton: StartWaveButton was not found in the HUD"));
+		return;
+	}
+
+	SkipCountdownCanvas = Cast<UCanvasPanel>(HUDWidget->WidgetTree->RootWidget);
+	if (!SkipCountdownCanvas)
+	{
+		SkipCountdownCanvas = Cast<UCanvasPanel>(StartWaveButton->GetParent());
+	}
+	if (!SkipCountdownCanvas)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CreateSkipCountdownButton: HUD has no canvas for overlaying the skip button"));
+		return;
+	}
+
+	SkipCountdownButton = HUDWidget->WidgetTree->ConstructWidget<UButton>(
+		UButton::StaticClass(),
+		TEXT("SkipCountdownButton"));
+	SkipCountdownButton->SetStyle(StartWaveButton->GetStyle());
+	SkipCountdownButton->SetColorAndOpacity(StartWaveButton->GetColorAndOpacity());
+
+	UTextBlock* Label = HUDWidget->WidgetTree->ConstructWidget<UTextBlock>(
+		UTextBlock::StaticClass(),
+		TEXT("SkipCountdownLabel"));
+	Label->SetText(FText::FromString(TEXT("Skip Countdown")));
+	Label->SetJustification(ETextJustify::Center);
+	if (UTextBlock* StartWaveLabel = Cast<UTextBlock>(StartWaveButton->GetChildAt(0)))
+	{
+		Label->SetFont(StartWaveLabel->GetFont());
+		Label->SetColorAndOpacity(StartWaveLabel->GetColorAndOpacity());
+		Label->SetShadowColorAndOpacity(StartWaveLabel->GetShadowColorAndOpacity());
+		Label->SetShadowOffset(StartWaveLabel->GetShadowOffset());
+	}
+	SkipCountdownButton->AddChild(Label);
+	if (UButtonSlot* ButtonSlot = Cast<UButtonSlot>(SkipCountdownButton->GetContentSlot()))
+	{
+		if (UButtonSlot* StartWaveButtonSlot = Cast<UButtonSlot>(StartWaveButton->GetContentSlot()))
+		{
+			ButtonSlot->SetHorizontalAlignment(StartWaveButtonSlot->GetHorizontalAlignment());
+			ButtonSlot->SetVerticalAlignment(StartWaveButtonSlot->GetVerticalAlignment());
+			ButtonSlot->SetPadding(StartWaveButtonSlot->GetPadding());
+		}
+	}
+
+	SkipCountdownButtonSlot = SkipCountdownCanvas->AddChildToCanvas(SkipCountdownButton);
+	if (SkipCountdownButtonSlot)
+	{
+		SkipCountdownButtonSlot->SetAnchors(FAnchors(0.f, 0.f));
+		SkipCountdownButtonSlot->SetAlignment(FVector2D::ZeroVector);
+		SkipCountdownButtonSlot->SetAutoSize(false);
+		if (const UCanvasPanelSlot* StartWaveCanvasSlot = Cast<UCanvasPanelSlot>(StartWaveButton->Slot))
+		{
+			SkipCountdownButtonSlot->SetSize(StartWaveCanvasSlot->GetSize());
+		}
+	}
+
+	SkipCountdownButton->OnClicked.AddDynamic(this, &ACaveboundPlayerController::HandleSkipCountdownClicked);
+	SkipCountdownButton->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void ACaveboundPlayerController::UpdateSkipCountdownButton()
+{
+	if (!SkipCountdownButton || !SkipCountdownButtonSlot || !SkipCountdownCanvas)
+	{
+		return;
+	}
+
+	const ACaveboundGameMode* GameMode = GetWorld()
+		? GetWorld()->GetAuthGameMode<ACaveboundGameMode>()
+		: nullptr;
+	if (!GameMode
+		|| GameMode->GetRoundState() != ECaveboundRoundState::Collecting
+		|| GameMode->GetCollectionTimeRemaining() <= 5.f)
+	{
+		SkipCountdownButton->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	SkipCountdownButton->SetVisibility(ESlateVisibility::Visible);
+	if (!StartWaveButton)
+	{
+		return;
+	}
+
+	const FGeometry StartGeometry = StartWaveButton->GetCachedGeometry();
+	const FVector2D StartSize = StartGeometry.GetLocalSize();
+	if (StartSize.IsNearlyZero())
+	{
+		return;
+	}
+
+	const FGeometry ViewportGeometry = SkipCountdownCanvas->GetCachedGeometry();
+	FVector2D Position = ViewportGeometry.AbsoluteToLocal(StartGeometry.GetAbsolutePosition());
+	const FVector2D SkipSize = StartSize;
+	SkipCountdownButtonSlot->SetSize(SkipSize);
+	SkipCountdownButtonSlot->SetPosition(Position);
+}
+
+void ACaveboundPlayerController::HandleSkipCountdownClicked()
+{
+	if (bPauseMenuOpen)
+	{
+		return;
+	}
+
+	if (ACaveboundGameMode* GameMode = GetWorld()
+		? GetWorld()->GetAuthGameMode<ACaveboundGameMode>()
+		: nullptr)
+	{
+		GameMode->SkipCollectionCountdown();
 	}
 }
 
@@ -316,6 +444,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 	{
 		RockReadout->Refresh();
 	}
+	UpdateSkipCountdownButton();
 
 	if (bPauseMenuOpen)
 	{
@@ -438,6 +567,11 @@ bool ACaveboundPlayerController::IsPointerOverInteractiveUI() const
 	}
 
 	if (BuildMenu && BuildMenu->IsInViewport() && HasHoveredInteractiveChild(BuildMenu))
+	{
+		return true;
+	}
+
+	if (SkipCountdownButton && SkipCountdownButton->IsHovered())
 	{
 		return true;
 	}
