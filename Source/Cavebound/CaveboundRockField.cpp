@@ -2,6 +2,7 @@
 
 #include "CaveboundRockDeposit.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
 #include "UObject/UnrealType.h"
 
 UCaveboundRockField::UCaveboundRockField()
@@ -92,6 +93,20 @@ void UCaveboundRockField::SpawnRocks()
 	const FTransform terrainTransform = terrain->GetActorTransform();
 	const FVector treeLocation = terrain->GetActorLocation();
 	TArray<FVector> chosen;
+	TArray<FVector> buildSlotLocations;
+	if (UClass* slotClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_BuildSlot.BP_BuildSlot_C")))
+	{
+		TArray<AActor*> buildSlots;
+		UGameplayStatics::GetAllActorsOfClass(world, slotClass, buildSlots);
+		for (const AActor* buildSlot : buildSlots)
+		{
+			if (buildSlot)
+			{
+				buildSlotLocations.Add(buildSlot->GetActorLocation());
+			}
+		}
+	}
+
 	const int32 pathMargins[] = {2, 0};
 
 	for (int32 pathMargin : pathMargins)
@@ -140,6 +155,13 @@ void UCaveboundRockField::SpawnRocks()
 					0.0);
 				const FVector worldPoint = terrainTransform.TransformPosition(localPoint);
 				if (FVector::Dist2D(worldPoint, treeLocation) < 700.f)
+				{
+					continue;
+				}
+				if (buildSlotLocations.ContainsByPredicate([&worldPoint](const FVector& slotLocation)
+					{
+						return FVector::Dist2D(worldPoint, slotLocation) < 300.f;
+					}))
 				{
 					continue;
 				}
