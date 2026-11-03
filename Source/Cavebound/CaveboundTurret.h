@@ -10,6 +10,7 @@ class UArrowComponent;
 class USceneComponent;
 class UStaticMeshComponent;
 class UStaticMesh;
+class UMaterialInstanceDynamic;
 class ACaveboundBaseEnemy;
 class ACaveboundGameMode;
 
@@ -64,6 +65,8 @@ protected:
 	void UseTowerMeshes(UStaticMesh* Level1, UStaticMesh* Level2, UStaticMesh* Level3, UStaticMesh* Fallback);
 	void ApplyUpgradeMesh();
 	virtual void ApplyLevelBonus();
+	void EnsureDamageVisualMaterial();
+	void UpdateDamageVisuals();
 	void RememberFirePoint();
 	void GetShotStart(FVector& shotLocation, FVector& shotForward) const;
 	float GetYawErrorToEnemy(const ACaveboundBaseEnemy* enemy) const;
@@ -139,4 +142,8 @@ protected:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMesh>> UpgradeMeshes;
+
+	// Vertex displacement MID on VisualMesh
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> DamageVisualMaterial;
 };

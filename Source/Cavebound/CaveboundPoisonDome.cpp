@@ -2,60 +2,12 @@
 
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundShaderMaterials.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
-#include "Materials/Material.h"
-#include "Materials/MaterialExpressionConstant.h"
-#include "Materials/MaterialExpressionConstant3Vector.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
-
-namespace
-{
-	// Green sphere visual
-	UMaterialInterface* MakeGreenDomeMaterial()
-	{
-		static TWeakObjectPtr<UMaterial> SavedMaterial;
-		if (UMaterial* Existing = SavedMaterial.Get())
-		{
-			return Existing;
-		}
-
-#if WITH_EDITORONLY_DATA
-		UMaterial* Green = NewObject<UMaterial>(GetTransientPackage(), NAME_None, RF_Transient);
-		Green->MaterialDomain = MD_Surface;
-		Green->BlendMode = BLEND_Translucent;
-		Green->SetShadingModel(MSM_Unlit);
-		Green->TwoSided = false;
-		Green->TranslucencyLightingMode = TLM_Surface;
-
-		Green->bAutomaticallySetUsageInEditor = true;
-
-		if (UMaterialEditorOnlyData* EditorData = Green->GetEditorOnlyData())
-		{
-			UMaterialExpressionConstant3Vector* GreenColor = NewObject<UMaterialExpressionConstant3Vector>(Green);
-			GreenColor->Constant = FLinearColor(0.1f, 0.85f, 0.15f, 1.f);
-			EditorData->ExpressionCollection.AddExpression(GreenColor);
-			GreenColor->ConnectExpression(&EditorData->EmissiveColor, 0);
-
-			UMaterialExpressionConstant* SeeThroughAmount = NewObject<UMaterialExpressionConstant>(Green);
-			SeeThroughAmount->R = 0.28f;
-			EditorData->ExpressionCollection.AddExpression(SeeThroughAmount);
-			SeeThroughAmount->ConnectExpression(&EditorData->Opacity, 0);
-		}
-
-		bool bNeedsRecompile = false;
-		Green->SetMaterialUsage(bNeedsRecompile, MATUSAGE_StaticMesh);
-		Green->PreEditChange(nullptr);
-		Green->PostEditChange();
-		SavedMaterial = Green;
-		return Green;
-#else
-		return nullptr;
-#endif
-	}
-}
 
 ACaveboundPoisonDome::ACaveboundPoisonDome()
 {
@@ -154,7 +106,7 @@ bool ACaveboundPoisonDome::IsCombatRound() const
 	return !gameMode || gameMode->GetRoundState() == ECaveboundRoundState::Combat;
 }
 
-// Updates cloud size
+// Updates cloud size and assigns the pulsing two-green poison shader.
 void ACaveboundPoisonDome::UpdatePoisonCloud()
 {
 	if (!PoisonCloud)
@@ -164,9 +116,14 @@ void ACaveboundPoisonDome::UpdatePoisonCloud()
 
 	PoisonCloud->bDisallowNanite = true;
 
-	if (UMaterialInterface* Green = MakeGreenDomeMaterial())
+	if (!GreenMaterial)
 	{
-		PoisonCloud->SetMaterial(0, Green);
+		GreenMaterial = CaveboundShaderMaterials::CreatePoisonPulseMID(this);
+	}
+
+	if (GreenMaterial)
+	{
+		PoisonCloud->SetMaterial(0, GreenMaterial);
 	}
 
 	const float widthScale = DomeRadius / 50.f;

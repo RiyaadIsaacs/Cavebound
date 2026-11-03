@@ -2,12 +2,14 @@
 #include "CaveboundArrow.h"
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundShaderMaterials.h"
 #include "Components/ArrowComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
 int32 ACaveboundTurret::GetCostForClass(TSubclassOf<AActor> DefenderClass)
@@ -78,6 +80,14 @@ void ACaveboundTurret::ApplyUpgradeMesh()
 	{
 		VisualMesh->SetStaticMesh(UpgradeMeshes[index]);
 	}
+
+	// Mesh swap clears slot materials — reapply the damage displace MID once we are in-world.
+	DamageVisualMaterial = nullptr;
+	if (GetWorld())
+	{
+		EnsureDamageVisualMaterial();
+		UpdateDamageVisuals();
+	}
 }
 
 void ACaveboundTurret::ApplyLevelBonus()
@@ -89,6 +99,42 @@ void ACaveboundTurret::ApplyLevelBonus()
 	FireInterval = BaseFireInterval * FMath::Max(0.45f, 1.f - UpgradeLevel * 0.22f);
 	ProjectileDamage = BaseProjectileDamage * growth;
 	ApplyUpgradeMesh();
+	UpdateDamageVisuals();
+}
+
+void ACaveboundTurret::EnsureDamageVisualMaterial()
+{
+	if (!VisualMesh)
+	{
+		return;
+	}
+
+	VisualMesh->bDisallowNanite = true;
+
+	if (!DamageVisualMaterial)
+	{
+		DamageVisualMaterial = CaveboundShaderMaterials::CreateTowerDamageDisplaceMID(this);
+	}
+
+	if (DamageVisualMaterial)
+	{
+		VisualMesh->SetMaterial(0, DamageVisualMaterial);
+	}
+}
+
+void ACaveboundTurret::UpdateDamageVisuals()
+{
+	EnsureDamageVisualMaterial();
+	if (!DamageVisualMaterial)
+	{
+		return;
+	}
+
+	const float HealthRatio = (MaxHealth > KINDA_SMALL_NUMBER)
+		? FMath::Clamp(Health / MaxHealth, 0.f, 1.f)
+		: 0.f;
+	const float DamageAmount = 1.f - HealthRatio;
+	DamageVisualMaterial->SetScalarParameterValue(TEXT("DamageAmount"), DamageAmount);
 }
 
 int32 ACaveboundTurret::GetNextUpgradeRockCost() const
@@ -193,6 +239,7 @@ bool ACaveboundTurret::TryRepair(ACaveboundGameMode* GameMode)
 	}
 
 	Health = MaxHealth;
+	UpdateDamageVisuals();
 	return true;
 }
 
@@ -253,6 +300,8 @@ void ACaveboundTurret::BeginPlay()
 	}
 
 	RememberFirePoint();
+	EnsureDamageVisualMaterial();
+	UpdateDamageVisuals();
 }
 
 void ACaveboundTurret::Tick(float DeltaTime)
@@ -294,6 +343,7 @@ void ACaveboundTurret::ApplyDamage(float Amount)
 	}
 
 	Health = FMath::Max(0.f, Health - Amount);
+	UpdateDamageVisuals();
 	PlayDamageFlash();
 
 	if (IsDestroyed())
