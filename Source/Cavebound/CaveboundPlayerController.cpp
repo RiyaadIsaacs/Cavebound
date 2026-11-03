@@ -5,8 +5,10 @@
 #include "CaveboundDefenderMenu.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundHoverHealth.h"
+#include "CaveboundHoverInfo.h"
 #include "CaveboundPlaceBeamVFX.h"
 #include "CaveboundResourceReadout.h"
+#include "CaveboundUIStyle.h"
 #include "CaveboundRockDeposit.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
@@ -26,6 +28,9 @@
 #include "Components/Slider.h"
 #include "Components/EditableText.h"
 #include "Components/EditableTextBox.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/ProgressBar.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -83,17 +88,16 @@ void ACaveboundPlayerController::ClearEnhancedClickMappings()
 
 void ACaveboundPlayerController::ShowHUD()
 {
-	if (!HUDWidgetClass || HUDWidget)
+	if (HUDWidgetClass && !HUDWidget)
 	{
-		return;
-	}
-
-	HUDWidget = CreateWidget<UUserWidget>(this, HUDWidgetClass);
-	if (HUDWidget)
-	{
-		HUDWidget->AddToViewport(0);
-		ConfigureHudClickThrough();
-		CreateSkipCountdownButton();
+		HUDWidget = CreateWidget<UUserWidget>(this, HUDWidgetClass);
+		if (HUDWidget)
+		{
+			HUDWidget->AddToViewport(0);
+			ConfigureHudClickThrough();
+			CreateSkipCountdownButton();
+			CreateSpeedButtons();
+		}
 	}
 
 	if (!RockReadout)
@@ -103,6 +107,15 @@ void ACaveboundPlayerController::ShowHUD()
 		{
 			RockReadout->AddToViewport(1);
 			RockReadout->Refresh();
+		}
+	}
+
+	if (!HoverInfo)
+	{
+		HoverInfo = CreateWidget<UCaveboundHoverInfo>(this, UCaveboundHoverInfo::StaticClass());
+		if (HoverInfo)
+		{
+			HoverInfo->AddToViewport(5);
 		}
 	}
 }
@@ -230,6 +243,136 @@ void ACaveboundPlayerController::HandleSkipCountdownClicked()
 	}
 }
 
+void ACaveboundPlayerController::CreateSpeedButtons()
+{
+	if (!HUDWidget || !HUDWidget->WidgetTree || SpeedButton1)
+	{
+		return;
+	}
+
+	UCanvasPanel* Canvas = SkipCountdownCanvas;
+	if (!Canvas)
+	{
+		Canvas = Cast<UCanvasPanel>(HUDWidget->WidgetTree->RootWidget);
+	}
+	if (!Canvas)
+	{
+		return;
+	}
+
+	auto MakeSpeedButton = [this](const FName Name, const FText& Label) -> UButton*
+	{
+		UButton* Button = HUDWidget->WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+		if (StartWaveButton)
+		{
+			Button->SetStyle(StartWaveButton->GetStyle());
+			Button->SetColorAndOpacity(StartWaveButton->GetColorAndOpacity());
+		}
+		else
+		{
+			Button->SetBackgroundColor(CaveboundUIStyle::ButtonBg());
+		}
+
+		UTextBlock* Text = HUDWidget->WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		Text->SetText(Label);
+		Text->SetJustification(ETextJustify::Center);
+		Text->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
+		Text->SetFont(CaveboundUIStyle::Font(14));
+		if (StartWaveButton)
+		{
+			if (UTextBlock* StartLabel = Cast<UTextBlock>(StartWaveButton->GetChildAt(0)))
+			{
+				Text->SetFont(StartLabel->GetFont());
+				Text->SetColorAndOpacity(StartLabel->GetColorAndOpacity());
+			}
+		}
+		Button->AddChild(Text);
+		if (UButtonSlot* Slot = Cast<UButtonSlot>(Button->GetContentSlot()))
+		{
+			Slot->SetHorizontalAlignment(HAlign_Center);
+			Slot->SetVerticalAlignment(VAlign_Center);
+			Slot->SetPadding(FMargin(8.f, 4.f));
+		}
+		return Button;
+	};
+
+	UHorizontalBox* Row = HUDWidget->WidgetTree->ConstructWidget<UHorizontalBox>(
+		UHorizontalBox::StaticClass(),
+		TEXT("SpeedButtonRow"));
+
+	SpeedButton1 = MakeSpeedButton(TEXT("SpeedButton1"), FText::FromString(TEXT("x1")));
+	SpeedButton2 = MakeSpeedButton(TEXT("SpeedButton2"), FText::FromString(TEXT("x2")));
+	SpeedButton3 = MakeSpeedButton(TEXT("SpeedButton3"), FText::FromString(TEXT("x3")));
+
+	auto AddToRow = [Row](UButton* Button)
+	{
+		if (UHorizontalBoxSlot* Slot = Row->AddChildToHorizontalBox(Button))
+		{
+			Slot->SetPadding(FMargin(4.f, 0.f));
+			Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		}
+	};
+	AddToRow(SpeedButton1);
+	AddToRow(SpeedButton2);
+	AddToRow(SpeedButton3);
+
+	SpeedButton1->OnClicked.AddDynamic(this, &ACaveboundPlayerController::HandleSpeed1Clicked);
+	SpeedButton2->OnClicked.AddDynamic(this, &ACaveboundPlayerController::HandleSpeed2Clicked);
+	SpeedButton3->OnClicked.AddDynamic(this, &ACaveboundPlayerController::HandleSpeed3Clicked);
+
+	SpeedButtonsSlot = Canvas->AddChildToCanvas(Row);
+	if (SpeedButtonsSlot)
+	{
+		SpeedButtonsSlot->SetAnchors(FAnchors(1.f, 1.f));
+		SpeedButtonsSlot->SetAlignment(FVector2D(1.f, 1.f));
+		SpeedButtonsSlot->SetPosition(FVector2D(-24.f, -24.f));
+		SpeedButtonsSlot->SetAutoSize(true);
+	}
+
+	SetGameSpeed(1.f);
+}
+
+void ACaveboundPlayerController::SetGameSpeed(float Speed)
+{
+	GameSpeed = Speed;
+	if (UWorld* World = GetWorld())
+	{
+		UGameplayStatics::SetGlobalTimeDilation(World, Speed);
+	}
+	RefreshSpeedButtonStyles();
+}
+
+void ACaveboundPlayerController::RefreshSpeedButtonStyles()
+{
+	auto StyleButton = [](UButton* Button, bool bActive)
+	{
+		if (!Button)
+		{
+			return;
+		}
+		Button->SetBackgroundColor(bActive ? CaveboundUIStyle::ButtonBgActive() : CaveboundUIStyle::ButtonBg());
+	};
+
+	StyleButton(SpeedButton1, FMath::IsNearlyEqual(GameSpeed, 1.f));
+	StyleButton(SpeedButton2, FMath::IsNearlyEqual(GameSpeed, 2.f));
+	StyleButton(SpeedButton3, FMath::IsNearlyEqual(GameSpeed, 3.f));
+}
+
+void ACaveboundPlayerController::HandleSpeed1Clicked()
+{
+	SetGameSpeed(1.f);
+}
+
+void ACaveboundPlayerController::HandleSpeed2Clicked()
+{
+	SetGameSpeed(2.f);
+}
+
+void ACaveboundPlayerController::HandleSpeed3Clicked()
+{
+	SetGameSpeed(3.f);
+}
+
 void ACaveboundPlayerController::ConfigureHudClickThrough()
 {
 	if (!HUDWidget)
@@ -250,11 +393,13 @@ void ACaveboundPlayerController::ConfigureHudClickThrough()
 			return;
 		}
 
+		// Leave interactive + progress widgets alone so HUD health bars still show/toggle.
 		if (Widget->IsA<UButton>()
 			|| Widget->IsA<UCheckBox>()
 			|| Widget->IsA<USlider>()
 			|| Widget->IsA<UEditableText>()
-			|| Widget->IsA<UEditableTextBox>())
+			|| Widget->IsA<UEditableTextBox>()
+			|| Widget->IsA<UProgressBar>())
 		{
 			return;
 		}
@@ -381,6 +526,7 @@ void ACaveboundPlayerController::ResumeGame()
 	bPauseMenuOpen = false;
 	HidePauseMenu();
 	UGameplayStatics::SetGamePaused(this, false);
+	SetGameSpeed(GameSpeed);
 	ApplyGameplayInputMode();
 }
 
@@ -449,6 +595,10 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 
 	if (bPauseMenuOpen)
 	{
+		if (HoverInfo)
+		{
+			HoverInfo->HideInfo();
+		}
 		bLeftMouseWasDown = IsMouseButtonHeld(EKeys::LeftMouseButton);
 		bRightMouseWasDown = IsMouseButtonHeld(EKeys::RightMouseButton);
 		return;
@@ -505,6 +655,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 	bRightMouseWasDown = bRMB;
 
 	UpdateHoveredHealthTarget();
+	UpdateHoverInfoWidget();
 }
 
 bool ACaveboundPlayerController::IsMouseButtonHeld(const FKey& Button) const
@@ -576,6 +727,12 @@ bool ACaveboundPlayerController::IsPointerOverInteractiveUI() const
 	{
 		return true;
 	}
+	if ((SpeedButton1 && SpeedButton1->IsHovered())
+		|| (SpeedButton2 && SpeedButton2->IsHovered())
+		|| (SpeedButton3 && SpeedButton3->IsHovered()))
+	{
+		return true;
+	}
 
 	return false;
 }
@@ -629,6 +786,43 @@ void ACaveboundPlayerController::OnClickMove()
 	}
 }
 
+AActor* ACaveboundPlayerController::TraceActorUnderCursor() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	FVector WorldLocation;
+	FVector WorldDirection;
+	if (!DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
+	{
+		return nullptr;
+	}
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(CursorTrace), false, GetPawn());
+	const FVector TraceEnd = WorldLocation + WorldDirection * 100000.f;
+
+	TArray<FHitResult> Hits;
+	World->LineTraceMultiByChannel(Hits, WorldLocation, TraceEnd, ECC_Visibility, Params);
+	if (Hits.Num() == 0)
+	{
+		World->LineTraceMultiByChannel(Hits, WorldLocation, TraceEnd, ECC_WorldDynamic, Params);
+	}
+
+	for (const FHitResult& Hit : Hits)
+	{
+		AActor* HitActor = Hit.GetActor();
+		if (!IsValid(HitActor) || HitActor == GetPawn())
+		{
+			continue;
+		}
+		return HitActor;
+	}
+	return nullptr;
+}
+
 void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 {
 	if (bOrbitingCamera || bPauseMenuOpen)
@@ -639,37 +833,45 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 
 	HoveredHealthActor = nullptr;
 
-	UWorld* World = GetWorld();
-	if (!World)
+	AActor* HitActor = TraceActorUnderCursor();
+	AActor* Candidate = HitActor;
+	while (Candidate)
+	{
+		if (Candidate->Implements<UCaveboundHoverHealth>())
+		{
+			HoveredHealthActor = Candidate;
+			return;
+		}
+		Candidate = Candidate->GetAttachParentActor();
+	}
+}
+
+void ACaveboundPlayerController::UpdateHoverInfoWidget()
+{
+	if (!HoverInfo)
 	{
 		return;
 	}
 
-	FVector WorldLocation;
-	FVector WorldDirection;
-	if (!DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
+	if (!HasHoveredHealthTarget())
 	{
+		HoverInfo->HideInfo();
 		return;
 	}
 
-	FHitResult Hit;
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(HoverHealth), false, GetPawn());
-	const FVector TraceEnd = WorldLocation + WorldDirection * 100000.f;
-	if (!World->LineTraceSingleByChannel(Hit, WorldLocation, TraceEnd, ECC_Visibility, Params))
+	float MouseX = 0.f;
+	float MouseY = 0.f;
+	if (!GetMousePosition(MouseX, MouseY))
 	{
+		HoverInfo->HideInfo();
 		return;
 	}
 
-	AActor* HitActor = Hit.GetActor();
-	if (!IsValid(HitActor) || HitActor == GetPawn())
-	{
-		return;
-	}
-
-	if (HitActor->Implements<UCaveboundHoverHealth>())
-	{
-		HoveredHealthActor = HitActor;
-	}
+	HoverInfo->ShowAt(
+		FVector2D(MouseX, MouseY),
+		GetHoveredDisplayName(),
+		GetHoveredHealth(),
+		GetHoveredMaxHealth());
 }
 
 bool ACaveboundPlayerController::HasHoveredHealthTarget() const

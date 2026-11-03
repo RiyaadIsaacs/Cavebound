@@ -1,5 +1,5 @@
 #include "CaveboundBuildPrompt.h"
-
+#include "CaveboundUIStyle.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -23,17 +23,15 @@ void UCaveboundBuildPrompt::NativeOnInitialized()
 
 	UBorder* Keycap = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("PromptKeycap"));
 	Keycap->SetPadding(FMargin(10.f, 6.f));
-	Keycap->SetBrushColor(FLinearColor(0.08f, 0.1f, 0.08f, 0.92f));
+	Keycap->SetBrushColor(CaveboundUIStyle::PanelBg());
 	Keycap->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("PromptLabel"));
 	PromptLabel = Label;
 	Label->SetText(FText::FromString(TEXT("B")));
-	Label->SetColorAndOpacity(FSlateColor(FLinearColor(0.85f, 1.f, 0.75f, 1.f)));
+	Label->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Accent()));
 	Label->SetJustification(ETextJustify::Center);
-	FSlateFontInfo Font = Label->GetFont();
-	Font.Size = 22;
-	Label->SetFont(Font);
+	Label->SetFont(CaveboundUIStyle::Font(20));
 	Keycap->SetContent(Label);
 
 	PanelSlot = Canvas->AddChildToCanvas(Keycap);

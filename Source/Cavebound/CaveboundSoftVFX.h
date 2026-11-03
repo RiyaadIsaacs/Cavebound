@@ -87,3 +87,51 @@ protected:
 	TArray<float> RadiusScale;
 	float Time = 0.f;
 };
+
+/** Magical smoke-and-sparkle poof used when an enemy appears. */
+UCLASS()
+class CAVEBOUND_API ACaveboundMagicPoof : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	ACaveboundMagicPoof();
+
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
+
+	static void SpawnAt(UWorld* World, const FVector& Location);
+
+	UPROPERTY(EditAnywhere, Category = "VFX")
+	FLinearColor Color = FLinearColor(0.55f, 0.25f, 0.9f, 1.f);
+
+	UPROPERTY(EditAnywhere, Category = "VFX")
+	int32 Count = 16;
+
+	UPROPERTY(EditAnywhere, Category = "VFX")
+	float Duration = 0.7f;
+
+protected:
+	UPROPERTY(VisibleAnywhere, Category = "VFX")
+	TObjectPtr<USceneComponent> Root;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> Puffs;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> PuffMats;
+
+	TArray<FVector> Speeds;
+	TArray<float> StartSizes;
+	TArray<FLinearColor> BaseTints;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> Core;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> CoreMat;
+
+	float Time = 0.f;
+
+	static void SetSoftColor(UMaterialInstanceDynamic* Mat, const FLinearColor& Tint, float Alpha);
+};

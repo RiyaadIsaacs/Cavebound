@@ -13,9 +13,11 @@ class UCanvasPanel;
 class UCaveboundBuildMenu;
 class UCaveboundBuildPrompt;
 class UCaveboundDefenderMenu;
+class UCaveboundHoverInfo;
 class UCaveboundResourceReadout;
 class UMaterialInterface;
 class ACaveboundTurret;
+class UHorizontalBox;
 
 /**
  * Reads the mouse and tells the Character where to walk.
@@ -90,8 +92,19 @@ protected:
 	void ShowHUD();
 	void CreateSkipCountdownButton();
 	void UpdateSkipCountdownButton();
+	void CreateSpeedButtons();
+	void SetGameSpeed(float Speed);
+	void RefreshSpeedButtonStyles();
+	void UpdateHoverInfoWidget();
+	AActor* TraceActorUnderCursor() const;
 	UFUNCTION()
 	void HandleSkipCountdownClicked();
+	UFUNCTION()
+	void HandleSpeed1Clicked();
+	UFUNCTION()
+	void HandleSpeed2Clicked();
+	UFUNCTION()
+	void HandleSpeed3Clicked();
 	void ShowPauseMenu();
 	void HidePauseMenu();
 	void ApplyGameplayInputMode();
@@ -141,6 +154,20 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UCanvasPanelSlot> SkipCountdownButtonSlot;
 
+	UPROPERTY()
+	TObjectPtr<UButton> SpeedButton1;
+
+	UPROPERTY()
+	TObjectPtr<UButton> SpeedButton2;
+
+	UPROPERTY()
+	TObjectPtr<UButton> SpeedButton3;
+
+	UPROPERTY()
+	TObjectPtr<UCanvasPanelSlot> SpeedButtonsSlot;
+
+	float GameSpeed = 1.f;
+
 	// Separate from WBP_PlayerHUD so pause can block input without breaking click-to-move
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> PauseMenuWidgetClass;
@@ -164,6 +191,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundResourceReadout> RockReadout;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundHoverInfo> HoverInfo;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> SlotHighlightMaterial;

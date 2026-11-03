@@ -65,10 +65,7 @@ ACaveboundPlaceBeamVFX::ACaveboundPlaceBeamVFX()
 		PopMesh->SetMaterial(0, GlowMat.Object);
 	}
 
-	BeamSystem = TSoftObjectPtr<UNiagaraSystem>(
-		FSoftObjectPath(TEXT("/Game/Assets/Effects/Particles/NS_PlaceBeam.NS_PlaceBeam")));
-	PopSystem = TSoftObjectPtr<UNiagaraSystem>(
-		FSoftObjectPath(TEXT("/Game/Assets/Effects/Particles/NS_PlacePop.NS_PlacePop")));
+	// Optional Niagara assets — if unset, BeginPlay / StartPop use engine fallbacks.
 }
 
 FLinearColor ACaveboundPlaceBeamVFX::ColorForBuild()

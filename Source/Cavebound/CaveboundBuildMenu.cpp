@@ -7,6 +7,7 @@
 #include "CaveboundSentry.h"
 #include "CaveboundSnare.h"
 #include "CaveboundTurret.h"
+#include "CaveboundUIStyle.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -47,21 +48,23 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 	UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BuildMenuFrame"));
 	FrameWidget = Frame;
 	Frame->SetPadding(FMargin(16.f, 12.f));
-	Frame->SetBrushColor(FLinearColor(0.12f, 0.12f, 0.12f, 0.94f));
+	Frame->SetBrushColor(CaveboundUIStyle::PanelBg());
 
 	UVerticalBox* Body = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BuildMenuBody"));
 	Frame->SetContent(Body);
 
 	UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildMenuTitle"));
 	Title->SetText(FText::FromString(TEXT("Choose a defender")));
-	Title->SetColorAndOpacity(FSlateColor(FLinearColor(0.9f, 0.9f, 0.9f, 1.f)));
+	Title->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
+	Title->SetFont(CaveboundUIStyle::Font(16));
 	if (UVerticalBoxSlot* TitleSlot = Body->AddChildToVerticalBox(Title))
 	{
 		TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 	}
 
 	WoodText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildMenuWood"));
-	WoodText->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.75f, 0.75f, 1.f)));
+	WoodText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
+	WoodText->SetFont(CaveboundUIStyle::Font(14));
 	if (UVerticalBoxSlot* WoodSlot = Body->AddChildToVerticalBox(WoodText))
 	{
 		WoodSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
@@ -71,7 +74,8 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 	Body->AddChildToVerticalBox(ChoiceBox);
 
 	StatusText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildMenuStatus"));
-	StatusText->SetColorAndOpacity(FSlateColor(FLinearColor(0.95f, 0.45f, 0.35f, 1.f)));
+	StatusText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Danger()));
+	StatusText->SetFont(CaveboundUIStyle::Font(13));
 	if (UVerticalBoxSlot* StatusSlot = Body->AddChildToVerticalBox(StatusText))
 	{
 		StatusSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
@@ -179,18 +183,20 @@ void UCaveboundBuildMenu::AddChoice(const FString& Label, TSubclassOf<AActor> De
 	const int32 Cost = ACaveboundTurret::GetCostForClass(DefenderClass);
 
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
-	Button->SetBackgroundColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.f));
+	Button->SetBackgroundColor(CaveboundUIStyle::ButtonBg());
 
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Button->AddChild(Row);
 	if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(Button->GetContentSlot()))
 	{
 		ContentSlot->SetHorizontalAlignment(HAlign_Fill);
+		ContentSlot->SetPadding(FMargin(8.f, 6.f));
 	}
 
 	UTextBlock* LabelText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 	LabelText->SetText(FText::FromString(Label));
-	LabelText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	LabelText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
+	LabelText->SetFont(CaveboundUIStyle::Font(14));
 	LabelText->SetJustification(ETextJustify::Left);
 	if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelText))
 	{
@@ -199,7 +205,8 @@ void UCaveboundBuildMenu::AddChoice(const FString& Label, TSubclassOf<AActor> De
 
 	UTextBlock* CostText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 	CostText->SetText(FText::FromString(FString::Printf(TEXT("%d wood"), Cost)));
-	CostText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	CostText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
+	CostText->SetFont(CaveboundUIStyle::Font(14));
 	CostText->SetJustification(ETextJustify::Right);
 	if (UHorizontalBoxSlot* CostSlot = Row->AddChildToHorizontalBox(CostText))
 	{

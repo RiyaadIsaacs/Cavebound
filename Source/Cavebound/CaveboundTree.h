@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "CaveboundDamageFlash.h"
+#include "CaveboundHoverHealth.h"
 #include "CaveboundTree.generated.h"
 
 class UStaticMeshComponent;
@@ -15,7 +16,7 @@ class ACaveboundHoverEmbers;
  * The central tower: a magical wood tree.
  */
 UCLASS()
-class CAVEBOUND_API ACaveboundTree : public AActor
+class CAVEBOUND_API ACaveboundTree : public AActor, public ICaveboundHoverHealth
 {
 	GENERATED_BODY()
 
@@ -24,6 +25,10 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
+
+	virtual float GetHoverHealth_Implementation() const override { return Health; }
+	virtual float GetHoverMaxHealth_Implementation() const override { return MaxHealth; }
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Tree")); }
 
 	// How close the player must stand to mine (cm).
 	float GetMineRange() const { return MineRange; }

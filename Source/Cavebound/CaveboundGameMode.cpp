@@ -8,6 +8,7 @@
 #include "CaveboundRockDeposit.h"
 #include "CaveboundRockField.h"
 #include "CaveboundTerrainExpansion.h"
+#include "CaveboundSoftVFX.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
 #include "Components/SplineComponent.h"
@@ -898,6 +899,11 @@ void ACaveboundGameMode::SpawnEnemy()
 	Enemy->InitAlongPath(ChosenSpline, Tree, PreferredLane);
 	++EnemiesSpawnedThisRound;
 	++EnemiesAliveThisRound;
+
+	// Magical poof as they appear on the path.
+	ACaveboundMagicPoof::SpawnAt(
+		World,
+		Enemy->GetActorLocation() + FVector(0.f, 0.f, 70.f));
 
 	UE_LOG(
 		LogTemp,

@@ -1,5 +1,5 @@
 #include "CaveboundHarvestBar.h"
-
+#include "CaveboundUIStyle.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
@@ -19,7 +19,8 @@ void UCaveboundHarvestBar::NativeOnInitialized()
 	WidgetTree->RootWidget = Column;
 
 	AmountText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("HarvestAmount"));
-	AmountText->SetColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.82f, 0.75f, 1.f)));
+	AmountText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
+	AmountText->SetFont(CaveboundUIStyle::Font(14));
 	AmountText->SetJustification(ETextJustify::Center);
 	if (UVerticalBoxSlot* AmountSlot = Column->AddChildToVerticalBox(AmountText))
 	{
@@ -27,7 +28,7 @@ void UCaveboundHarvestBar::NativeOnInitialized()
 	}
 
 	Bar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), TEXT("HarvestBar"));
-	Bar->SetFillColorAndOpacity(FLinearColor(0.62f, 0.55f, 0.42f, 1.f));
+	Bar->SetFillColorAndOpacity(CaveboundUIStyle::BarFill());
 	Bar->SetPercent(0.f);
 	Column->AddChildToVerticalBox(Bar);
 }

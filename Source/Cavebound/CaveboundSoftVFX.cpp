@@ -304,3 +304,159 @@ void ACaveboundHoverEmbers::Tick(float DeltaTime)
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Magical spawn poof
+// ---------------------------------------------------------------------------
+
+void ACaveboundMagicPoof::SetSoftColor(UMaterialInstanceDynamic* Mat, const FLinearColor& Tint, float Alpha)
+{
+	if (!Mat)
+	{
+		return;
+	}
+
+	// Widget translucent mat only cares about Color.A for fade — keep RGB soft (no HDR blowout).
+	FLinearColor Soft = Tint;
+	Soft.R = FMath::Clamp(Soft.R, 0.f, 1.f);
+	Soft.G = FMath::Clamp(Soft.G, 0.f, 1.f);
+	Soft.B = FMath::Clamp(Soft.B, 0.f, 1.f);
+	Soft.A = FMath::Clamp(Alpha, 0.f, 1.f);
+	Mat->SetVectorParameterValue(TEXT("Color"), Soft);
+}
+
+ACaveboundMagicPoof::ACaveboundMagicPoof()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(Root);
+	SetActorEnableCollision(false);
+}
+
+void ACaveboundMagicPoof::SpawnAt(UWorld* World, const FVector& Location)
+{
+	if (!World)
+	{
+		return;
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	World->SpawnActor<ACaveboundMagicPoof>(
+		ACaveboundMagicPoof::StaticClass(),
+		Location,
+		FRotator::ZeroRotator,
+		Params);
+}
+
+void ACaveboundMagicPoof::BeginPlay()
+{
+	Super::BeginPlay();
+
+	UStaticMesh* Mesh = SoftVFX::SphereMesh();
+	// One soft translucent material for everything — emissive was causing the broken look.
+	UMaterialInterface* Soft = SoftVFX::SoftMat();
+	if (!Mesh || !Soft)
+	{
+		Destroy();
+		return;
+	}
+
+	{
+		UMaterialInstanceDynamic* Mat = nullptr;
+		Core = SoftVFX::MakeBall(this, Root, Mesh, Soft, TEXT("PoofCore"), Mat);
+		Core->SetRelativeScale3D(FVector(0.12f));
+		Core->SetTranslucentSortPriority(2);
+		CoreMat = Mat;
+		SetSoftColor(CoreMat, FMath::Lerp(Color, FLinearColor(0.9f, 0.85f, 1.f), 0.35f), 0.9f);
+	}
+
+	Puffs.Reset();
+	PuffMats.Reset();
+	Speeds.Reset();
+	StartSizes.Reset();
+	BaseTints.Reset();
+
+	for (int32 i = 0; i < Count; ++i)
+	{
+		UMaterialInstanceDynamic* Mat = nullptr;
+		UStaticMeshComponent* Puff = SoftVFX::MakeBall(
+			this,
+			Root,
+			Mesh,
+			Soft,
+			*FString::Printf(TEXT("Poof_%d"), i),
+			Mat);
+
+		const float Size = FMath::FRandRange(0.1f, 0.26f);
+		Puff->SetRelativeScale3D(FVector(Size * 0.2f));
+		Puff->SetRelativeLocation(FVector(
+			FMath::FRandRange(-16.f, 16.f),
+			FMath::FRandRange(-16.f, 16.f),
+			FMath::FRandRange(8.f, 48.f)));
+		Puff->SetTranslucentSortPriority(1);
+
+		const float Mix = FMath::FRandRange(0.f, 1.f);
+		FLinearColor Tint = FMath::Lerp(Color, FLinearColor(0.8f, 0.88f, 1.f), Mix * 0.4f);
+		SetSoftColor(Mat, Tint, 0.75f);
+
+		FVector Dir = FMath::VRand();
+		Dir.Z = FMath::Abs(Dir.Z) * 0.5f + 0.5f;
+		Dir.Normalize();
+		Speeds.Add(Dir * FMath::FRandRange(140.f, 300.f));
+		StartSizes.Add(Size);
+		BaseTints.Add(Tint);
+		Puffs.Add(Puff);
+		PuffMats.Add(Mat);
+	}
+}
+
+void ACaveboundMagicPoof::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	Time += DeltaTime;
+	const float T = FMath::Clamp(Time / FMath::Max(0.05f, Duration), 0.f, 1.f);
+
+	// Expand quickly, then ease out to fully transparent.
+	const float Expand = FMath::InterpEaseOut(0.f, 1.f, FMath::Clamp(T / 0.35f, 0.f, 1.f), 2.f);
+	const float Fade = FMath::InterpEaseIn(1.f, 0.f, T, 2.2f);
+
+	if (Core)
+	{
+		const float CoreSize = FMath::Lerp(0.12f, 0.85f, Expand) * FMath::Lerp(1.f, 0.35f, T);
+		Core->SetRelativeScale3D(FVector(CoreSize));
+		Core->SetVisibility(Fade > 0.02f);
+		SetSoftColor(
+			CoreMat,
+			FMath::Lerp(Color, FLinearColor(0.9f, 0.85f, 1.f), 0.35f),
+			Fade * 0.85f);
+	}
+
+	for (int32 i = 0; i < Puffs.Num(); ++i)
+	{
+		UStaticMeshComponent* Puff = Puffs[i];
+		if (!Puff)
+		{
+			continue;
+		}
+
+		Speeds[i] *= FMath::Clamp(1.f - DeltaTime * 2.2f, 0.65f, 1.f);
+		Speeds[i].Z += 25.f * DeltaTime;
+		Puff->AddRelativeLocation(Speeds[i] * DeltaTime);
+
+		// Grow, then shrink away as they fade so nothing pops off.
+		const float Grow = FMath::Lerp(StartSizes[i] * 0.2f, StartSizes[i] * 1.35f, Expand);
+		const float Size = Grow * FMath::Lerp(1.f, 0.45f, T);
+		Puff->SetRelativeScale3D(FVector(Size));
+		Puff->SetVisibility(Fade > 0.02f);
+
+		const FLinearColor Tint = BaseTints.IsValidIndex(i) ? BaseTints[i] : Color;
+		SetSoftColor(PuffMats.IsValidIndex(i) ? PuffMats[i] : nullptr, Tint, Fade * 0.7f);
+	}
+
+	if (T >= 1.f || Fade <= 0.01f)
+	{
+		Destroy();
+	}
+}

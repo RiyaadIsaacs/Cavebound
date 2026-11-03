@@ -43,8 +43,9 @@ ACaveboundEnemy::ACaveboundEnemy()
 	HitVolume->SetupAttachment(VisualMesh);
 	HitVolume->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
 	HitVolume->SetRelativeScale3D(FVector(1.2f, 1.2f, 2.0f));
+	// Invisible for rendering, but keep HiddenInGame false so hover/visibility traces still hit.
 	HitVolume->SetVisibility(false);
-	HitVolume->SetHiddenInGame(true);
+	HitVolume->SetHiddenInGame(false);
 	HitVolume->SetCastShadow(false);
 	HitVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	HitVolume->SetCollisionObjectType(ECC_WorldDynamic);
@@ -168,6 +169,8 @@ void ACaveboundEnemy::EnsureAnimationAssets()
 
 	if (HitVolume)
 	{
+		HitVolume->SetVisibility(false);
+		HitVolume->SetHiddenInGame(false);
 		HitVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 		HitVolume->SetCollisionObjectType(ECC_WorldDynamic);
 		HitVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
