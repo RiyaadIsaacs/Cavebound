@@ -79,16 +79,14 @@ void ACaveboundPlayerController::ClearEnhancedClickMappings()
 
 void ACaveboundPlayerController::ShowHUD()
 {
-	if (!HUDWidgetClass || HUDWidget)
+	if (HUDWidgetClass && !HUDWidget)
 	{
-		return;
-	}
-
-	HUDWidget = CreateWidget<UUserWidget>(this, HUDWidgetClass);
-	if (HUDWidget)
-	{
-		HUDWidget->AddToViewport(0);
-		ConfigureHudClickThrough();
+		HUDWidget = CreateWidget<UUserWidget>(this, HUDWidgetClass);
+		if (HUDWidget)
+		{
+			HUDWidget->AddToViewport(0);
+			ConfigureHudClickThrough();
+		}
 	}
 
 	if (!RockReadout)
@@ -878,13 +876,14 @@ bool ACaveboundPlayerController::UseDefenderAction(AActor* Slot, int32 Action, F
 			return false;
 		}
 
-		// Swap to the upgraded mesh first, then fade it in with the beam color and pop.
+		// Upgrade: beam-colored tint + pop, but no scale fade-in (build-only).
 		Defender->ApplyCommittedUpgrade();
 		ACaveboundPlaceBeamVFX::SpawnAt(
 			World,
 			Slot->GetActorLocation(),
 			ACaveboundPlaceBeamVFX::ColorForUpgrade(NextLevel),
-			Defender);
+			Defender,
+			false);
 		return true;
 	}
 

@@ -1,7 +1,9 @@
 #include "CaveboundCharacter.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundMoveMarker.h"
 #include "CaveboundRockDeposit.h"
 #include "CaveboundTree.h"
+#include "Engine/World.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimSingleNodeInstance.h"
 #include "Animation/BlendSpace1D.h"
@@ -185,6 +187,42 @@ void ACaveboundCharacter::SetMoveDestination(const FVector& Destination)
 	StopMining();
 	MoveDestination = Destination;
 	bHasMoveDestination = true;
+	ShowMoveMarker(Destination);
+}
+
+void ACaveboundCharacter::ShowMoveMarker(const FVector& WorldLocation)
+{
+	// One shared ring actor — spawn once, then just move it.
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	if (!MoveMarker)
+	{
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		MoveMarker = World->SpawnActor<ACaveboundMoveMarker>(
+			ACaveboundMoveMarker::StaticClass(),
+			WorldLocation,
+			FRotator::ZeroRotator,
+			Params);
+	}
+
+	if (MoveMarker)
+	{
+		MoveMarker->ShowAt(WorldLocation);
+	}
+}
+
+void ACaveboundCharacter::HideMoveMarker()
+{
+	if (MoveMarker)
+	{
+		MoveMarker->Hide();
+	}
 }
 
 void ACaveboundCharacter::SetTreeTarget(ACaveboundTree* Tree)
@@ -202,6 +240,7 @@ void ACaveboundCharacter::SetTreeTarget(ACaveboundTree* Tree)
 	// Walk toward the trunk, not the click point on the canopy (it can be in the air).
 	MoveDestination = Tree->GetActorLocation();
 	bHasMoveDestination = true;
+	ShowMoveMarker(MoveDestination);
 }
 
 void ACaveboundCharacter::SetRockTarget(ACaveboundRockDeposit* Rock)
@@ -216,6 +255,7 @@ void ACaveboundCharacter::SetRockTarget(ACaveboundRockDeposit* Rock)
 	MiningTime = 0.f;
 	MoveDestination = Rock->GetActorLocation();
 	bHasMoveDestination = true;
+	ShowMoveMarker(MoveDestination);
 }
 
 void ACaveboundCharacter::StopMining()
@@ -248,6 +288,7 @@ void ACaveboundCharacter::TryMine(float DeltaTime)
 	}
 
 	bHasMoveDestination = false;
+	HideMoveMarker();
 
 	// If can't collect wood, reset mining time and notify player
 	if (UWorld* World = GetWorld())
@@ -296,6 +337,7 @@ void ACaveboundCharacter::TryHarvestRock(float DeltaTime)
 	}
 
 	bHasMoveDestination = false;
+	HideMoveMarker();
 
 	if (UWorld* World = GetWorld())
 	{
@@ -350,6 +392,7 @@ void ACaveboundCharacter::Tick(float DeltaTime)
 		if (ToTarget.Size() <= StopDistance)
 		{
 			bHasMoveDestination = false;
+			HideMoveMarker();
 		}
 		else
 		{

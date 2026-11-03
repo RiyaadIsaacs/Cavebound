@@ -1,6 +1,7 @@
 #include "CaveboundTree.h"
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundSoftVFX.h"
 #include "CaveboundTreeProjectile.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -45,6 +46,20 @@ ACaveboundTree::ACaveboundTree()
 	}
 
 	Health = MaxHealth;
+}
+
+void ACaveboundTree::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Soft deep warm-green orbs that drift around the canopy.
+	if (!GreenEmbers)
+	{
+		GreenEmbers = ACaveboundHoverEmbers::SpawnAttached(
+			this,
+			FVector(0.f, 0.f, 320.f),
+			FLinearColor(0.18f, 0.42f, 0.12f, 1.f));
+	}
 }
 
 void ACaveboundTree::ApplyDamage(float Amount)

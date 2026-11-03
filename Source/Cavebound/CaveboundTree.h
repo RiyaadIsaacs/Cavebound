@@ -9,6 +9,7 @@ class UStaticMeshComponent;
 class USceneComponent;
 class ACaveboundBaseEnemy;
 class ACaveboundTreeProjectile;
+class ACaveboundHoverEmbers;
 
 /**
  * The central tower: a magical wood tree.
@@ -21,6 +22,7 @@ class CAVEBOUND_API ACaveboundTree : public AActor
 public:
 	ACaveboundTree();
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
 	// How close the player must stand to mine (cm).
@@ -105,4 +107,7 @@ protected:
 	TSubclassOf<ACaveboundTreeProjectile> ProjectileClass;
 
 	float FireTime = 0.f;
+
+	UPROPERTY()
+	TObjectPtr<ACaveboundHoverEmbers> GreenEmbers;
 };

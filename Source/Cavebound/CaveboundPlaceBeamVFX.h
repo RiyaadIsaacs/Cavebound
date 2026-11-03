@@ -10,8 +10,10 @@ class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 
 /**
- * Vertical beam for place/upgrade. Fades the reveal actor in with the beam color,
- * then plays a pop burst when the beam ends and the defender finishes spawning in.
+ * Vertical light beam used when placing or upgrading a defender.
+ *
+ * Build: yellow beam, defender fades in, then a short pop.
+ * Upgrade: cyan/red beam that tints the defender (no fade-in).
  */
 UCLASS()
 class CAVEBOUND_API ACaveboundPlaceBeamVFX : public AActor
@@ -25,16 +27,26 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	/** Yellow — used when first placing a defender. */
 	static FLinearColor ColorForBuild();
+
+	/** Cyan for 1st upgrade, red for 2nd. NextUpgradeLevel is the level after upgrade (1 or 2). */
 	static FLinearColor ColorForUpgrade(int32 NextUpgradeLevel);
 
-	// C++ only — TFunction is not UHT-safe.
+	/**
+	 * Spawns the beam at Location.
+	 * RevealActor — defender to tint / fade in (optional).
+	 * bFadeIn — true = build fade; false = solid upgrade tint.
+	 * OnDone — called when the beam ends and the pop starts (optional).
+	 * Note: TFunction cannot be a UFUNCTION, so this is C++ only.
+	 */
 	static ACaveboundPlaceBeamVFX* SpawnAt(
 		UWorld* World,
 		const FVector& Location,
 		const FLinearColor& Color,
 		AActor* RevealActor = nullptr,
-		TFunction<void()> Finished = nullptr);
+		bool bFadeIn = true,
+		TFunction<void()> OnDone = nullptr);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VFX")
 	TSoftObjectPtr<UNiagaraSystem> BeamSystem;
@@ -48,16 +60,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VFX")
 	float BeamRadius = 42.f;
 
+	/** How long the beam stays up before the pop. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VFX")
 	float Duration = 1.15f;
 
+	/** How long the pop flash lasts. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VFX")
 	float PopDuration = 0.35f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VFX")
 	FLinearColor BeamColor = FLinearColor(1.f, 0.85f, 0.15f, 1.f);
 
-	TFunction<void()> OnFinished;
+	/** True = scale/fade the defender in. False = solid tint only (upgrades). */
+	bool bFadeIn = true;
+
+	TFunction<void()> OnDone;
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "VFX")
@@ -70,32 +87,33 @@ protected:
 	TObjectPtr<UStaticMeshComponent> PopMesh;
 
 	UPROPERTY(VisibleAnywhere, Category = "VFX")
-	TObjectPtr<UNiagaraComponent> Niagara;
+	TObjectPtr<UNiagaraComponent> BeamNiagara;
 
 	UPROPERTY(VisibleAnywhere, Category = "VFX")
 	TObjectPtr<UNiagaraComponent> PopNiagara;
 
 	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> BeamMID;
+	TObjectPtr<UMaterialInstanceDynamic> BeamMat;
 
 	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> PopMID;
+	TObjectPtr<UMaterialInstanceDynamic> PopMat;
 
+	/** Overlay tint put on the defender while the beam plays. */
 	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> RevealMID;
+	TObjectPtr<UMaterialInstanceDynamic> OverlayMat;
 
 	TWeakObjectPtr<AActor> RevealActor;
-	TArray<TWeakObjectPtr<UStaticMeshComponent>> RevealMeshes;
-	TArray<FVector> RevealBaseScales;
+	TArray<TWeakObjectPtr<UStaticMeshComponent>> Meshes;
+	TArray<FVector> MeshScales;
 
-	float Age = 0.f;
-	float PopAge = 0.f;
-	bool bInPop = false;
-	bool bFinished = false;
+	float Time = 0.f;
+	float PopTime = 0.f;
+	bool bPopping = false;
+	bool bDone = false;
 
-	void BeginReveal();
-	void UpdateReveal(float Alpha);
+	void StartReveal();
+	void UpdateReveal(float Progress);
 	void ClearReveal();
 	void StartPop();
-	void FinishAndDestroy();
+	void Finish();
 };

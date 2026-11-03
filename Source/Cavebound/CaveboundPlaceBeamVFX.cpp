@@ -19,12 +19,14 @@ ACaveboundPlaceBeamVFX::ACaveboundPlaceBeamVFX()
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
+	// Tall cylinder = the beam body.
 	BeamMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BeamMesh"));
 	BeamMesh->SetupAttachment(Root);
 	BeamMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BeamMesh->SetCastShadow(false);
 	BeamMesh->SetReceivesDecals(false);
 
+	// Sphere flash at the end of the cast.
 	PopMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PopMesh"));
 	PopMesh->SetupAttachment(Root);
 	PopMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -33,34 +35,34 @@ ACaveboundPlaceBeamVFX::ACaveboundPlaceBeamVFX()
 	PopMesh->SetVisibility(false);
 	PopMesh->SetRelativeScale3D(FVector(0.05f));
 
-	Niagara = CreateDefaultSubobject<UNiagaraComponent>(TEXT("Niagara"));
-	Niagara->SetupAttachment(Root);
-	Niagara->SetAutoActivate(false);
+	BeamNiagara = CreateDefaultSubobject<UNiagaraComponent>(TEXT("BeamNiagara"));
+	BeamNiagara->SetupAttachment(Root);
+	BeamNiagara->SetAutoActivate(false);
 
 	PopNiagara = CreateDefaultSubobject<UNiagaraComponent>(TEXT("PopNiagara"));
 	PopNiagara->SetupAttachment(Root);
 	PopNiagara->SetAutoActivate(false);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderFinder(
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(
 		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (CylinderFinder.Succeeded())
+	if (Cylinder.Succeeded())
 	{
-		BeamMesh->SetStaticMesh(CylinderFinder.Object);
+		BeamMesh->SetStaticMesh(Cylinder.Object);
 	}
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereFinder(
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(
 		TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	if (SphereFinder.Succeeded())
+	if (Sphere.Succeeded())
 	{
-		PopMesh->SetStaticMesh(SphereFinder.Object);
+		PopMesh->SetStaticMesh(Sphere.Object);
 	}
 
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> EmissiveFinder(
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> GlowMat(
 		TEXT("/Engine/EngineMaterials/EmissiveMeshMaterial.EmissiveMeshMaterial"));
-	if (EmissiveFinder.Succeeded())
+	if (GlowMat.Succeeded())
 	{
-		BeamMesh->SetMaterial(0, EmissiveFinder.Object);
-		PopMesh->SetMaterial(0, EmissiveFinder.Object);
+		BeamMesh->SetMaterial(0, GlowMat.Object);
+		PopMesh->SetMaterial(0, GlowMat.Object);
 	}
 
 	BeamSystem = TSoftObjectPtr<UNiagaraSystem>(
@@ -71,16 +73,16 @@ ACaveboundPlaceBeamVFX::ACaveboundPlaceBeamVFX()
 
 FLinearColor ACaveboundPlaceBeamVFX::ColorForBuild()
 {
-	return FLinearColor(1.f, 0.85f, 0.12f, 1.f);
+	return FLinearColor(1.f, 0.85f, 0.12f, 1.f); // yellow
 }
 
 FLinearColor ACaveboundPlaceBeamVFX::ColorForUpgrade(int32 NextUpgradeLevel)
 {
 	if (NextUpgradeLevel >= 2)
 	{
-		return FLinearColor(1.f, 0.18f, 0.12f, 1.f);
+		return FLinearColor(1.f, 0.18f, 0.12f, 1.f); // red — 2nd upgrade
 	}
-	return FLinearColor(0.25f, 0.9f, 1.f, 1.f);
+	return FLinearColor(0.25f, 0.9f, 1.f, 1.f); // cyan — 1st upgrade
 }
 
 ACaveboundPlaceBeamVFX* ACaveboundPlaceBeamVFX::SpawnAt(
@@ -88,17 +90,18 @@ ACaveboundPlaceBeamVFX* ACaveboundPlaceBeamVFX::SpawnAt(
 	const FVector& Location,
 	const FLinearColor& Color,
 	AActor* InRevealActor,
-	TFunction<void()> Finished)
+	bool bInFadeIn,
+	TFunction<void()> InOnDone)
 {
 	if (!World)
 	{
 		return nullptr;
 	}
 
-	const FTransform SpawnTransform(FRotator::ZeroRotator, Location);
+	const FTransform SpawnXform(FRotator::ZeroRotator, Location);
 	ACaveboundPlaceBeamVFX* Beam = World->SpawnActorDeferred<ACaveboundPlaceBeamVFX>(
 		ACaveboundPlaceBeamVFX::StaticClass(),
-		SpawnTransform,
+		SpawnXform,
 		nullptr,
 		nullptr,
 		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
@@ -109,43 +112,47 @@ ACaveboundPlaceBeamVFX* ACaveboundPlaceBeamVFX::SpawnAt(
 
 	Beam->BeamColor = Color;
 	Beam->RevealActor = InRevealActor;
-	Beam->OnFinished = MoveTemp(Finished);
-	return Cast<ACaveboundPlaceBeamVFX>(UGameplayStatics::FinishSpawningActor(Beam, SpawnTransform));
+	Beam->bFadeIn = bInFadeIn;
+	Beam->OnDone = MoveTemp(InOnDone);
+	return Cast<ACaveboundPlaceBeamVFX>(UGameplayStatics::FinishSpawningActor(Beam, SpawnXform));
 }
 
 void ACaveboundPlaceBeamVFX::BeginPlay()
 {
 	Super::BeginPlay();
 
-	Age = 0.f;
-	PopAge = 0.f;
-	bInPop = false;
-	bFinished = false;
+	Time = 0.f;
+	PopTime = 0.f;
+	bPopping = false;
+	bDone = false;
 
-	if (UMaterialInterface* BaseMat = BeamMesh ? BeamMesh->GetMaterial(0) : nullptr)
+	// Tint the beam mesh.
+	if (UMaterialInterface* Base = BeamMesh ? BeamMesh->GetMaterial(0) : nullptr)
 	{
-		BeamMID = BeamMesh->CreateDynamicMaterialInstance(0, BaseMat);
-		if (BeamMID)
+		BeamMat = BeamMesh->CreateDynamicMaterialInstance(0, Base);
+		if (BeamMat)
 		{
-			BeamMID->SetVectorParameterValue(TEXT("Color"), BeamColor);
-			BeamMID->SetVectorParameterValue(TEXT("EmissiveColor"), BeamColor);
+			BeamMat->SetVectorParameterValue(TEXT("Color"), BeamColor);
+			BeamMat->SetVectorParameterValue(TEXT("EmissiveColor"), BeamColor);
 		}
 	}
 
-	if (UMaterialInterface* PopBase = PopMesh ? PopMesh->GetMaterial(0) : nullptr)
+	if (UMaterialInterface* Base = PopMesh ? PopMesh->GetMaterial(0) : nullptr)
 	{
-		PopMID = PopMesh->CreateDynamicMaterialInstance(0, PopBase);
-		if (PopMID)
+		PopMat = PopMesh->CreateDynamicMaterialInstance(0, Base);
+		if (PopMat)
 		{
-			PopMID->SetVectorParameterValue(TEXT("Color"), BeamColor);
-			PopMID->SetVectorParameterValue(TEXT("EmissiveColor"), BeamColor);
+			PopMat->SetVectorParameterValue(TEXT("Color"), BeamColor);
+			PopMat->SetVectorParameterValue(TEXT("EmissiveColor"), BeamColor);
 		}
 	}
 
-	const float RadiusScale = FMath::Max(1.f, BeamRadius) / 50.f;
+	// Start small; Tick grows the beam upward.
+	const float Radius = FMath::Max(1.f, BeamRadius) / 50.f;
 	BeamMesh->SetRelativeLocation(FVector(0.f, 0.f, BeamHeight * 0.5f));
-	BeamMesh->SetRelativeScale3D(FVector(RadiusScale, RadiusScale, 0.05f));
+	BeamMesh->SetRelativeScale3D(FVector(Radius, Radius, 0.05f));
 
+	// Optional Niagara particles on top of the mesh beam.
 	UNiagaraSystem* System = BeamSystem.LoadSynchronous();
 	if (!System)
 	{
@@ -156,16 +163,16 @@ void ACaveboundPlaceBeamVFX::BeginPlay()
 
 	if (System)
 	{
-		Niagara->SetAsset(System);
-		Niagara->SetRelativeScale3D(FVector(FMath::Max(0.55f, BeamRadius / 28.f)));
-		Niagara->Activate(true);
+		BeamNiagara->SetAsset(System);
+		BeamNiagara->SetRelativeScale3D(FVector(FMath::Max(0.55f, BeamRadius / 28.f)));
+		BeamNiagara->Activate(true);
 	}
 	else
 	{
-		Niagara->Deactivate();
+		BeamNiagara->Deactivate();
 	}
 
-	BeginReveal();
+	StartReveal();
 	SetActorTickEnabled(true);
 }
 
@@ -175,7 +182,7 @@ void ACaveboundPlaceBeamVFX::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void ACaveboundPlaceBeamVFX::BeginReveal()
+void ACaveboundPlaceBeamVFX::StartReveal()
 {
 	AActor* Actor = RevealActor.Get();
 	if (!Actor)
@@ -183,6 +190,7 @@ void ACaveboundPlaceBeamVFX::BeginReveal()
 		return;
 	}
 
+	// Keep turret from fighting the fade while we own its look.
 	if (ACaveboundTurret* Turret = Cast<ACaveboundTurret>(Actor))
 	{
 		Turret->SetRevealLocked(true);
@@ -190,82 +198,93 @@ void ACaveboundPlaceBeamVFX::BeginReveal()
 
 	Actor->SetActorHiddenInGame(false);
 
-	TArray<UStaticMeshComponent*> Meshes;
-	Actor->GetComponents<UStaticMeshComponent>(Meshes);
-	RevealMeshes.Reset();
-	RevealBaseScales.Reset();
+	TArray<UStaticMeshComponent*> Found;
+	Actor->GetComponents<UStaticMeshComponent>(Found);
+	Meshes.Reset();
+	MeshScales.Reset();
 
 	UMaterialInterface* OverlayBase = LoadObject<UMaterialInterface>(
 		nullptr,
 		TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Translucent.Widget3DPassThrough_Translucent"));
 	if (OverlayBase)
 	{
-		RevealMID = UMaterialInstanceDynamic::Create(OverlayBase, this);
+		OverlayMat = UMaterialInstanceDynamic::Create(OverlayBase, this);
 	}
 
-	for (UStaticMeshComponent* Mesh : Meshes)
+	for (UStaticMeshComponent* Mesh : Found)
 	{
 		if (!IsValid(Mesh) || !Mesh->GetStaticMesh())
 		{
 			continue;
 		}
 
-		RevealMeshes.Add(Mesh);
-		RevealBaseScales.Add(Mesh->GetRelativeScale3D());
+		Meshes.Add(Mesh);
+		MeshScales.Add(Mesh->GetRelativeScale3D());
 		Mesh->SetVisibility(true);
 		Mesh->SetHiddenInGame(false);
-		if (RevealMID)
+		if (OverlayMat)
 		{
-			Mesh->SetOverlayMaterial(RevealMID);
+			Mesh->SetOverlayMaterial(OverlayMat);
 		}
 	}
 
 	UpdateReveal(0.f);
 }
 
-void ACaveboundPlaceBeamVFX::UpdateReveal(float Alpha)
+void ACaveboundPlaceBeamVFX::UpdateReveal(float Progress)
 {
-	const float Clamped = FMath::Clamp(Alpha, 0.f, 1.f);
-	const float Soft = FMath::InterpEaseOut(0.f, 1.f, Clamped, 2.f);
+	const float T = FMath::Clamp(Progress, 0.f, 1.f);
+	const float Ease = FMath::InterpEaseOut(0.f, 1.f, T, 2.f);
 
-	if (RevealMID)
+	if (OverlayMat)
 	{
-		// Strong beam-colored hologram that eases toward the real mesh.
 		FLinearColor Tint = BeamColor;
-		Tint.A = FMath::Lerp(0.95f, 0.15f, Soft);
-		RevealMID->SetVectorParameterValue(TEXT("Color"), Tint);
+		if (bFadeIn)
+		{
+			// Build: strong hologram that eases toward the real mesh.
+			Tint.A = FMath::Lerp(0.95f, 0.15f, Ease);
+		}
+		else
+		{
+			// Upgrade: solid beam color, no fade.
+			Tint.A = 0.8f;
+		}
+		OverlayMat->SetVectorParameterValue(TEXT("Color"), Tint);
 	}
 
-	for (int32 Index = 0; Index < RevealMeshes.Num(); ++Index)
+	// Upgrades skip the scale pop-in.
+	if (!bFadeIn)
 	{
-		UStaticMeshComponent* Mesh = RevealMeshes[Index].Get();
+		return;
+	}
+
+	for (int32 i = 0; i < Meshes.Num(); ++i)
+	{
+		UStaticMeshComponent* Mesh = Meshes[i].Get();
 		if (!IsValid(Mesh))
 		{
 			continue;
 		}
 
-		const FVector BaseScale = RevealBaseScales.IsValidIndex(Index)
-			? RevealBaseScales[Index]
-			: FVector::OneVector;
-		const float ScaleAlpha = FMath::Lerp(0.2f, 1.f, Soft);
-		Mesh->SetRelativeScale3D(BaseScale * ScaleAlpha);
+		const FVector Base = MeshScales.IsValidIndex(i) ? MeshScales[i] : FVector::OneVector;
+		Mesh->SetRelativeScale3D(Base * FMath::Lerp(0.2f, 1.f, Ease));
 	}
 }
 
 void ACaveboundPlaceBeamVFX::ClearReveal()
 {
-	for (int32 Index = 0; Index < RevealMeshes.Num(); ++Index)
+	for (int32 i = 0; i < Meshes.Num(); ++i)
 	{
-		UStaticMeshComponent* Mesh = RevealMeshes[Index].Get();
+		UStaticMeshComponent* Mesh = Meshes[i].Get();
 		if (!IsValid(Mesh))
 		{
 			continue;
 		}
 
 		Mesh->SetOverlayMaterial(nullptr);
-		if (RevealBaseScales.IsValidIndex(Index))
+		if (MeshScales.IsValidIndex(i))
 		{
-			Mesh->SetRelativeScale3D(RevealBaseScales[Index]);
+			Mesh->SetRelativeScale3D(MeshScales[i]);
 		}
 	}
 
@@ -274,31 +293,31 @@ void ACaveboundPlaceBeamVFX::ClearReveal()
 		Turret->SetRevealLocked(false);
 	}
 
-	RevealMeshes.Reset();
-	RevealBaseScales.Reset();
-	RevealMID = nullptr;
+	Meshes.Reset();
+	MeshScales.Reset();
+	OverlayMat = nullptr;
 }
 
 void ACaveboundPlaceBeamVFX::StartPop()
 {
-	bInPop = true;
-	PopAge = 0.f;
+	bPopping = true;
+	PopTime = 0.f;
 
-	if (Niagara)
+	if (BeamNiagara)
 	{
-		Niagara->Deactivate();
+		BeamNiagara->Deactivate();
 	}
 	if (BeamMesh)
 	{
 		BeamMesh->SetVisibility(false);
 	}
 
-	// Finish the materialize: real mesh, full scale, then the pop sells the spawn-in.
+	// Defender is fully shown before the pop flash.
 	ClearReveal();
-	if (OnFinished)
+	if (OnDone)
 	{
-		TFunction<void()> Callback = MoveTemp(OnFinished);
-		OnFinished = nullptr;
+		TFunction<void()> Callback = MoveTemp(OnDone);
+		OnDone = nullptr;
 		Callback();
 	}
 
@@ -330,17 +349,17 @@ void ACaveboundPlaceBeamVFX::StartPop()
 	}
 }
 
-void ACaveboundPlaceBeamVFX::FinishAndDestroy()
+void ACaveboundPlaceBeamVFX::Finish()
 {
-	if (bFinished)
+	if (bDone)
 	{
 		return;
 	}
-	bFinished = true;
+	bDone = true;
 
-	if (Niagara)
+	if (BeamNiagara)
 	{
-		Niagara->Deactivate();
+		BeamNiagara->Deactivate();
 	}
 	if (PopNiagara)
 	{
@@ -355,57 +374,60 @@ void ACaveboundPlaceBeamVFX::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (bInPop)
+	// --- Pop flash phase ---
+	if (bPopping)
 	{
-		PopAge += DeltaTime;
-		const float T = FMath::Clamp(PopAge / FMath::Max(0.05f, PopDuration), 0.f, 1.f);
-		const float PopScale = FMath::InterpEaseOut(0.08f, 2.4f, T, 2.f);
-		const float PopAlpha = 1.f - T;
+		PopTime += DeltaTime;
+		const float T = FMath::Clamp(PopTime / FMath::Max(0.05f, PopDuration), 0.f, 1.f);
+		const float Scale = FMath::InterpEaseOut(0.08f, 2.4f, T, 2.f);
+		const float Alpha = 1.f - T;
 
 		if (PopMesh)
 		{
-			PopMesh->SetRelativeScale3D(FVector(PopScale));
-			PopMesh->SetVisibility(PopAlpha > 0.02f);
+			PopMesh->SetRelativeScale3D(FVector(Scale));
+			PopMesh->SetVisibility(Alpha > 0.02f);
 		}
-		if (PopMID)
+		if (PopMat)
 		{
-			const FLinearColor Lit = BeamColor * (0.5f + 2.2f * PopAlpha);
-			PopMID->SetVectorParameterValue(TEXT("Color"), Lit);
-			PopMID->SetVectorParameterValue(TEXT("EmissiveColor"), Lit);
-			PopMID->SetScalarParameterValue(TEXT("Opacity"), PopAlpha);
-			PopMID->SetScalarParameterValue(TEXT("Multiply"), PopAlpha);
+			const FLinearColor Lit = BeamColor * (0.5f + 2.2f * Alpha);
+			PopMat->SetVectorParameterValue(TEXT("Color"), Lit);
+			PopMat->SetVectorParameterValue(TEXT("EmissiveColor"), Lit);
+			PopMat->SetScalarParameterValue(TEXT("Opacity"), Alpha);
+			PopMat->SetScalarParameterValue(TEXT("Multiply"), Alpha);
 		}
 
 		if (T >= 1.f)
 		{
-			FinishAndDestroy();
+			Finish();
 		}
 		return;
 	}
 
-	Age += DeltaTime;
-	const float T = FMath::Clamp(Age / FMath::Max(0.05f, Duration), 0.f, 1.f);
+	// --- Main beam phase ---
+	Time += DeltaTime;
+	const float T = FMath::Clamp(Time / FMath::Max(0.05f, Duration), 0.f, 1.f);
 
+	// Rise quickly, then fade out near the end.
 	const float Rise = FMath::InterpEaseOut(0.05f, 1.f, FMath::Clamp(T / 0.22f, 0.f, 1.f), 2.f);
 	const float Fade = T < 0.55f ? 1.f : FMath::InterpEaseIn(1.f, 0.f, (T - 0.55f) / 0.45f, 2.f);
 	const float Alpha = Rise * Fade;
 
-	const float HeightScale = (FMath::Max(10.f, BeamHeight) / 100.f) * Rise;
-	const float RadiusScale = (FMath::Max(1.f, BeamRadius) / 50.f) * FMath::Lerp(1.2f, 0.65f, T);
+	const float Height = (FMath::Max(10.f, BeamHeight) / 100.f) * Rise;
+	const float Radius = (FMath::Max(1.f, BeamRadius) / 50.f) * FMath::Lerp(1.2f, 0.65f, T);
 	BeamMesh->SetRelativeLocation(FVector(0.f, 0.f, BeamHeight * 0.5f * Rise));
-	BeamMesh->SetRelativeScale3D(FVector(RadiusScale, RadiusScale, HeightScale));
+	BeamMesh->SetRelativeScale3D(FVector(Radius, Radius, Height));
 	BeamMesh->SetVisibility(Alpha > 0.02f);
 
-	if (BeamMID)
+	if (BeamMat)
 	{
 		const FLinearColor Lit = BeamColor * (0.35f + 1.8f * Alpha);
-		BeamMID->SetVectorParameterValue(TEXT("Color"), Lit);
-		BeamMID->SetVectorParameterValue(TEXT("EmissiveColor"), Lit);
-		BeamMID->SetScalarParameterValue(TEXT("Opacity"), Alpha);
-		BeamMID->SetScalarParameterValue(TEXT("Multiply"), Alpha);
+		BeamMat->SetVectorParameterValue(TEXT("Color"), Lit);
+		BeamMat->SetVectorParameterValue(TEXT("EmissiveColor"), Lit);
+		BeamMat->SetScalarParameterValue(TEXT("Opacity"), Alpha);
+		BeamMat->SetScalarParameterValue(TEXT("Multiply"), Alpha);
 	}
 
-	// Defender fades in over most of the beam, fully formed before the pop.
+	// Defender finishes fading in before the pop.
 	UpdateReveal(FMath::Clamp(T / 0.85f, 0.f, 1.f));
 
 	if (T >= 1.f)
