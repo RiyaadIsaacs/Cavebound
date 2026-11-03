@@ -5,6 +5,7 @@
 #include "CaveboundDefenderMenu.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundHoverHealth.h"
+#include "CaveboundPlaceBeamVFX.h"
 #include "CaveboundResourceReadout.h"
 #include "CaveboundRockDeposit.h"
 #include "CaveboundTree.h"
@@ -1003,11 +1004,22 @@ bool ACaveboundPlayerController::UseDefenderAction(AActor* Slot, int32 Action, F
 			OutFailure = TEXT("Not enough resources.");
 			return false;
 		}
-		if (!Defender->TryUpgrade(GameMode))
+
+		const int32 NextLevel = Defender->GetUpgradeLevel() + 1;
+		if (!Defender->CommitUpgradePurchase(GameMode))
 		{
 			OutFailure = TEXT("Not enough resources.");
 			return false;
 		}
+
+		// Upgrade: beam-colored tint + pop, but no scale fade-in (build-only).
+		Defender->ApplyCommittedUpgrade();
+		ACaveboundPlaceBeamVFX::SpawnAt(
+			World,
+			Slot->GetActorLocation(),
+			ACaveboundPlaceBeamVFX::ColorForUpgrade(NextLevel),
+			Defender,
+			false);
 		return true;
 	}
 
@@ -1276,16 +1288,48 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 		return false;
 	}
 
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	AActor* Spawned = World->SpawnActor<AActor>(DefenderClass, Slot->GetActorTransform(), SpawnParams);
+	if (FBoolProperty* OccupiedWrite = FindFProperty<FBoolProperty>(Slot->GetClass(), TEXT("IsOccupied")))
+	{
+		OccupiedWrite->SetPropertyValue_InContainer(Slot, true);
+	}
+
+	const FTransform SlotTransform = Slot->GetActorTransform();
+	AActor* Spawned = SpawnPlacedDefender(Slot, DefenderClass, SlotTransform);
 	if (!Spawned)
 	{
 		GameMode->AddWood(Cost);
+		ClearSlotOccupied(Slot);
 		return false;
 	}
 
-	// BP_DefenderBase.SetOccupied reads Terrain — assign the procedural terrain if the BP exposes it
+	// Fade the defender in with the yellow beam, then pop it in when the beam ends.
+	ACaveboundPlaceBeamVFX::SpawnAt(
+		World,
+		Slot->GetActorLocation(),
+		ACaveboundPlaceBeamVFX::ColorForBuild(),
+		Spawned);
+	return true;
+}
+
+AActor* ACaveboundPlayerController::SpawnPlacedDefender(
+	AActor* Slot,
+	TSubclassOf<AActor> DefenderClass,
+	const FTransform& SlotTransform)
+{
+	UWorld* World = GetWorld();
+	if (!Slot || !DefenderClass || !World)
+	{
+		return nullptr;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	AActor* Spawned = World->SpawnActor<AActor>(DefenderClass, SlotTransform, SpawnParams);
+	if (!Spawned)
+	{
+		return nullptr;
+	}
+
 	if (FObjectProperty* TerrainProp = FindFProperty<FObjectProperty>(Spawned->GetClass(), TEXT("Terrain")))
 	{
 		if (!TerrainProp->GetObjectPropertyValue_InContainer(Spawned))
@@ -1316,7 +1360,7 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 
 	Spawned->OnDestroyed.AddDynamic(this, &ACaveboundPlayerController::HandlePlacedDefenderDestroyed);
 	DefendersToSlots.Add(Spawned, Slot);
-	return true;
+	return Spawned;
 }
 
 void ACaveboundPlayerController::ClearSlotOccupied(AActor* Slot)

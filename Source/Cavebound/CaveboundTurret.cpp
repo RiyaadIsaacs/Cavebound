@@ -193,7 +193,7 @@ void ACaveboundTurret::GetDisarmRefund(int32& OutWood, int32& OutRock) const
 	}
 }
 
-bool ACaveboundTurret::TryUpgrade(ACaveboundGameMode* GameMode)
+bool ACaveboundTurret::CommitUpgradePurchase(ACaveboundGameMode* GameMode)
 {
 	if (!GameMode || IsDestroyed() || UpgradeLevel >= 2)
 	{
@@ -220,8 +220,28 @@ bool ACaveboundTurret::TryUpgrade(ACaveboundGameMode* GameMode)
 
 	RockSpent += rockCost;
 	WoodSpent += woodCost;
+	return true;
+}
+
+void ACaveboundTurret::ApplyCommittedUpgrade()
+{
+	if (IsDestroyed() || UpgradeLevel >= 2)
+	{
+		return;
+	}
+
 	++UpgradeLevel;
 	ApplyLevelBonus();
+}
+
+bool ACaveboundTurret::TryUpgrade(ACaveboundGameMode* GameMode)
+{
+	if (!CommitUpgradePurchase(GameMode))
+	{
+		return false;
+	}
+
+	ApplyCommittedUpgrade();
 	return true;
 }
 
@@ -308,7 +328,7 @@ void ACaveboundTurret::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (!bAutoFire || IsDestroyed())
+	if (!bAutoFire || bRevealLocked || IsDestroyed())
 	{
 		return;
 	}

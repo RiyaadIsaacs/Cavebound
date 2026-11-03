@@ -116,6 +116,8 @@ protected:
 	bool GetSlotScreenPosition(const AActor* Slot, float Height, FVector2D& OutScreenPosition) const;
 	AActor* FindBuildSlotForMenu() const;
 	void ClearSlotOccupied(AActor* Slot);
+	// Spawns and registers the defender immediately so the beam can fade it in.
+	AActor* SpawnPlacedDefender(AActor* Slot, TSubclassOf<AActor> DefenderClass, const FTransform& SlotTransform);
 
 	UFUNCTION()
 	void HandlePlacedDefenderDestroyed(AActor* DestroyedActor);

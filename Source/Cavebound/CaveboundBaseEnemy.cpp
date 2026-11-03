@@ -1,4 +1,5 @@
 #include "CaveboundBaseEnemy.h"
+#include "CaveboundSoftVFX.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundSnare.h"
 #include "CaveboundTree.h"
@@ -94,6 +95,11 @@ void ACaveboundBaseEnemy::ApplyDamage(float Amount)
 
 	Health = FMath::Max(0.f, Health - Amount);
 	PlayDamageFlash();
+	// Yellow hit sparks.
+	ACaveboundSparkBurst::SpawnAt(
+		GetWorld(),
+		GetActorLocation() + FVector(0.f, 0.f, 60.f),
+		FLinearColor(1.f, 0.85f, 0.12f, 1.f));
 
 	if (IsDead())
 	{

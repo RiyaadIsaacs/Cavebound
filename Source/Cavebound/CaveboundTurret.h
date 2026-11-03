@@ -54,7 +54,14 @@ public:
 	int32 GetRepairCost() const;
 	void GetDisarmRefund(int32& OutWood, int32& OutRock) const;
 	bool TryUpgrade(ACaveboundGameMode* GameMode);
+	// Spend upgrade resources now; call ApplyCommittedUpgrade after place/upgrade VFX.
+	bool CommitUpgradePurchase(ACaveboundGameMode* GameMode);
+	void ApplyCommittedUpgrade();
 	bool TryRepair(ACaveboundGameMode* GameMode);
+
+	// While true, the turret is materializing and will not auto-fire.
+	void SetRevealLocked(bool bLocked) { bRevealLocked = bLocked; }
+	bool IsRevealLocked() const { return bRevealLocked; }
 
 protected:
 	virtual void PlayDamageFlash();
@@ -139,6 +146,7 @@ protected:
 	int32 WoodSpent = 0;
 	int32 RockSpent = 0;
 	bool bBaseStatsSaved = false;
+	bool bRevealLocked = false;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMesh>> UpgradeMeshes;
