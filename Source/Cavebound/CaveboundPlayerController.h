@@ -17,6 +17,7 @@ class UCaveboundHoverInfo;
 class UCaveboundDamageVignette;
 class UCaveboundResourceReadout;
 class UMaterialInterface;
+class UMaterialInstanceDynamic;
 class ACaveboundTurret;
 class UHorizontalBox;
 
@@ -118,6 +119,11 @@ protected:
 	void ConfigureHudClickThrough();
 	void ClearEnhancedClickMappings();
 	void UpdateHoveredHealthTarget();
+	void UpdateHoverGlow();
+	void ClearHoverGlow();
+	void ApplyHoverGlow(AActor* Actor, const FLinearColor& Color);
+	FLinearColor GetHoverGlowColor(const AActor* Actor) const;
+	bool IsBuildSlotActor(const AActor* Actor) const;
 	bool IsPointerOverInteractiveUI() const;
 	bool IsMouseButtonHeld(const FKey& Button) const;
 	/** True only if the cursor is over the actor's on-screen silhouette (not a huge collision volume). */
@@ -186,6 +192,15 @@ protected:
 	void OnClickMove();
 
 	TWeakObjectPtr<AActor> HoveredHealthActor;
+	TWeakObjectPtr<AActor> HoveredBuildSlot;
+	TWeakObjectPtr<AActor> HoverGlowActor;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> HoverGlowMaterial;
+
+	/** Flat tint overlay — used for skeletal enemies / Nanite-prone rocks where rim outline fails. */
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> HoverGlowFillMaterial;
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundBuildMenu> BuildMenu;

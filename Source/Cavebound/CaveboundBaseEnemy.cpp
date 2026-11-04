@@ -186,6 +186,14 @@ bool ACaveboundBaseEnemy::IsSnaredBy(const AActor* Source) const
 	return bIsSnared && SnareSource.Get() == Source;
 }
 
+void ACaveboundBaseEnemy::GatherHoverGlowMeshes(TArray<UMeshComponent*>& OutMeshes) const
+{
+	if (VisualMesh && VisualMesh->GetStaticMesh())
+	{
+		OutMeshes.Add(VisualMesh);
+	}
+}
+
 void ACaveboundBaseEnemy::PlayDamageFlash()
 {
 	TArray<UStaticMeshComponent*> Meshes;

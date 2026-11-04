@@ -15,8 +15,10 @@
 #if WITH_EDITORONLY_DATA
 #include "Engine/Texture2D.h"
 #include "Materials/MaterialExpressionAdd.h"
+#include "Materials/MaterialExpressionComponentMask.h"
 #include "Materials/MaterialExpressionConstant.h"
 #include "Materials/MaterialExpressionConstant3Vector.h"
+#include "Materials/MaterialExpressionFresnel.h"
 #include "Materials/MaterialExpressionLinearInterpolate.h"
 #include "Materials/MaterialExpressionMultiply.h"
 #include "Materials/MaterialExpressionScalarParameter.h"
@@ -34,6 +36,9 @@ namespace CaveboundShaderMaterials
 	static constexpr const TCHAR* PoisonPulsePath = TEXT("/Game/Assets/Materials/M_PoisonPulse.M_PoisonPulse");
 	static constexpr const TCHAR* TowerDamagePackage = TEXT("/Game/Assets/Materials/M_TowerDamageDisplace");
 	static constexpr const TCHAR* TowerDamagePath = TEXT("/Game/Assets/Materials/M_TowerDamageDisplace.M_TowerDamageDisplace");
+	// V3: Intensity drives emissive only; OpacityBoost drives rim strength (V2 was too faint).
+	static constexpr const TCHAR* HoverOutlinePackage = TEXT("/Game/Assets/Materials/M_HoverOutlineV3");
+	static constexpr const TCHAR* HoverOutlinePath = TEXT("/Game/Assets/Materials/M_HoverOutlineV3.M_HoverOutlineV3");
 	static constexpr const TCHAR* TowerTexturePath = TEXT("/Game/Assets/Models/Towers/T_FortressElves.T_FortressElves");
 
 #if WITH_EDITORONLY_DATA
@@ -273,6 +278,87 @@ namespace CaveboundShaderMaterials
 		return Material;
 	}
 
+	static UMaterial* BuildHoverOutlineMaterial(UObject* Outer, FName AssetName)
+	{
+		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
+		Material->MaterialDomain = MD_Surface;
+		Material->BlendMode = BLEND_Translucent;
+		Material->SetShadingModel(MSM_Unlit);
+		Material->TwoSided = true;
+		Material->TranslucencyLightingMode = TLM_Surface;
+		Material->bAutomaticallySetUsageInEditor = true;
+
+		UMaterialEditorOnlyData* EditorData = Material->GetEditorOnlyData();
+		if (!EditorData)
+		{
+			return Material;
+		}
+
+		UMaterialExpressionVectorParameter* OutlineColor = NewObject<UMaterialExpressionVectorParameter>(Material);
+		OutlineColor->ParameterName = TEXT("OutlineColor");
+		OutlineColor->DefaultValue = FLinearColor(1.f, 1.f, 1.f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(OutlineColor);
+
+		UMaterialExpressionScalarParameter* Intensity = NewObject<UMaterialExpressionScalarParameter>(Material);
+		Intensity->ParameterName = TEXT("Intensity");
+		Intensity->DefaultValue = 5.f;
+		EditorData->ExpressionCollection.AddExpression(Intensity);
+
+		UMaterialExpressionScalarParameter* OpacityBoost = NewObject<UMaterialExpressionScalarParameter>(Material);
+		OpacityBoost->ParameterName = TEXT("OpacityBoost");
+		OpacityBoost->DefaultValue = 2.75f;
+		EditorData->ExpressionCollection.AddExpression(OpacityBoost);
+
+		UMaterialExpressionScalarParameter* Exponent = NewObject<UMaterialExpressionScalarParameter>(Material);
+		Exponent->ParameterName = TEXT("Exponent");
+		Exponent->DefaultValue = 2.4f;
+		EditorData->ExpressionCollection.AddExpression(Exponent);
+
+		// Soft fill so the tint reads even on faces pointed at the camera.
+		UMaterialExpressionScalarParameter* MinOpacity = NewObject<UMaterialExpressionScalarParameter>(Material);
+		MinOpacity->ParameterName = TEXT("MinOpacity");
+		MinOpacity->DefaultValue = 0.2f;
+		EditorData->ExpressionCollection.AddExpression(MinOpacity);
+
+		UMaterialExpressionFresnel* Fresnel = NewObject<UMaterialExpressionFresnel>(Material);
+		Fresnel->Exponent = 2.4f;
+		Fresnel->BaseReflectFraction = 0.f;
+		EditorData->ExpressionCollection.AddExpression(Fresnel);
+		Fresnel->ExponentIn.Connect(0, Exponent);
+
+		UMaterialExpressionMultiply* RimBoosted = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(RimBoosted);
+		RimBoosted->A.Connect(0, Fresnel);
+		RimBoosted->B.Connect(0, OpacityBoost);
+
+		UMaterialExpressionAdd* RimPlusFill = NewObject<UMaterialExpressionAdd>(Material);
+		EditorData->ExpressionCollection.AddExpression(RimPlusFill);
+		RimPlusFill->A.Connect(0, RimBoosted);
+		RimPlusFill->B.Connect(0, MinOpacity);
+		RimPlusFill->ConnectExpression(&EditorData->Opacity, 0);
+
+		// RGB only — masking .A off a vector param fails to compile on SM6 in UE 5.8.
+		UMaterialExpressionComponentMask* ColorRGB = NewObject<UMaterialExpressionComponentMask>(Material);
+		ColorRGB->R = true;
+		ColorRGB->G = true;
+		ColorRGB->B = true;
+		ColorRGB->A = false;
+		EditorData->ExpressionCollection.AddExpression(ColorRGB);
+		ColorRGB->Input.Connect(0, OutlineColor);
+
+		UMaterialExpressionMultiply* Emissive = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(Emissive);
+		Emissive->A.Connect(0, ColorRGB);
+		Emissive->B.Connect(0, Intensity);
+		Emissive->ConnectExpression(&EditorData->EmissiveColor, 0);
+
+		bool bNeedsRecompile = false;
+		Material->SetMaterialUsage(bNeedsRecompile, MATUSAGE_StaticMesh);
+		Material->SetMaterialUsage(bNeedsRecompile, MATUSAGE_SkeletalMesh);
+		FinalizeMaterial(Material);
+		return Material;
+	}
+
 	static UMaterialInterface* EnsureContentMaterial(
 		const TCHAR* ObjectPath,
 		const TCHAR* LongPackageName,
@@ -331,6 +417,19 @@ namespace CaveboundShaderMaterials
 #endif
 	}
 
+	UMaterialInterface* GetHoverOutlineMaterial()
+	{
+#if WITH_EDITORONLY_DATA
+		return EnsureContentMaterial(
+			HoverOutlinePath,
+			HoverOutlinePackage,
+			TEXT("M_HoverOutlineV3"),
+			[](UObject* Outer, FName Name) { return BuildHoverOutlineMaterial(Outer, Name); });
+#else
+		return LoadObject<UMaterialInterface>(nullptr, HoverOutlinePath);
+#endif
+	}
+
 	UMaterialInstanceDynamic* CreatePoisonPulseMID(UObject* Outer)
 	{
 		UMaterialInterface* Parent = GetPoisonPulseMaterial();
@@ -344,6 +443,16 @@ namespace CaveboundShaderMaterials
 	UMaterialInstanceDynamic* CreateTowerDamageDisplaceMID(UObject* Outer)
 	{
 		UMaterialInterface* Parent = GetTowerDamageDisplaceMaterial();
+		if (!Parent || !Outer)
+		{
+			return nullptr;
+		}
+		return UMaterialInstanceDynamic::Create(Parent, Outer);
+	}
+
+	UMaterialInstanceDynamic* CreateHoverOutlineMID(UObject* Outer)
+	{
+		UMaterialInterface* Parent = GetHoverOutlineMaterial();
 		if (!Parent || !Outer)
 		{
 			return nullptr;

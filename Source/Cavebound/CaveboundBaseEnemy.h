@@ -6,6 +6,7 @@
 #include "CaveboundHoverHealth.h"
 #include "CaveboundBaseEnemy.generated.h"
 
+class UMeshComponent;
 class UStaticMeshComponent;
 class USplineComponent;
 class ACaveboundTree;
@@ -60,6 +61,9 @@ public:
 	float GetMaxLaneOffset() const { return MaxLaneOffset; }
 
 	bool IsDead() const { return Health <= 0.f; }
+
+	/** Meshes that should receive hover / damage-style overlays. */
+	virtual void GatherHoverGlowMeshes(TArray<UMeshComponent*>& OutMeshes) const;
 
 protected:
 	// Walk along PathSpline

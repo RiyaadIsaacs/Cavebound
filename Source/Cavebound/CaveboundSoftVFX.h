@@ -19,7 +19,13 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
-	static void SpawnAt(UWorld* World, const FVector& Location, const FLinearColor& Color);
+	/** InCount <= 0 keeps the default Count. SizeScale multiplies spark size + travel. */
+	static void SpawnAt(
+		UWorld* World,
+		const FVector& Location,
+		const FLinearColor& Color,
+		int32 InCount = 0,
+		float InSizeScale = 1.f);
 
 	UPROPERTY(EditAnywhere, Category = "VFX")
 	FLinearColor Color = FLinearColor(1.f, 0.85f, 0.15f, 1.f);
@@ -29,6 +35,9 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "VFX")
 	float Duration = 0.35f;
+
+	UPROPERTY(EditAnywhere, Category = "VFX")
+	float SizeScale = 1.f;
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "VFX")

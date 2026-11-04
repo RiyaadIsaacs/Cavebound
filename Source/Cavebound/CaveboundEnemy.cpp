@@ -358,6 +358,15 @@ UCaveboundMinionAnimInstance* ACaveboundEnemy::GetMinionAnim() const
 	return Body ? Cast<UCaveboundMinionAnimInstance>(Body->GetAnimInstance()) : nullptr;
 }
 
+void ACaveboundEnemy::GatherHoverGlowMeshes(TArray<UMeshComponent*>& OutMeshes) const
+{
+	if (Body && Body->GetSkeletalMeshAsset())
+	{
+		OutMeshes.Add(Body);
+	}
+	Super::GatherHoverGlowMeshes(OutMeshes);
+}
+
 void ACaveboundEnemy::UpdatePresentation(float DeltaTime, const FVector& LocationBeforeTick)
 {
 	UCaveboundMinionAnimInstance* minionAnim = GetMinionAnim();

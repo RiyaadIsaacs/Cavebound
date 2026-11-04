@@ -9,18 +9,23 @@
 #include "CaveboundHoverInfo.h"
 #include "CaveboundPlaceBeamVFX.h"
 #include "CaveboundResourceReadout.h"
+#include "CaveboundShaderMaterials.h"
 #include "CaveboundUIStyle.h"
 #include "Engine/PostProcessVolume.h"
 #include "EngineUtils.h"
+#include "CaveboundBaseEnemy.h"
 #include "CaveboundRockDeposit.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
 #include "Components/InputComponent.h"
+#include "Components/MeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "EnhancedInputSubsystems.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/Widget.h"
 #include "Components/Button.h"
@@ -615,6 +620,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 		{
 			HoverInfo->HideInfo();
 		}
+		ClearHoverGlow();
 		bLeftMouseWasDown = IsMouseButtonHeld(EKeys::LeftMouseButton);
 		bRightMouseWasDown = IsMouseButtonHeld(EKeys::RightMouseButton);
 		return;
@@ -672,6 +678,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 
 	UpdateHoveredHealthTarget();
 	UpdateHoverInfoWidget();
+	UpdateHoverGlow();
 }
 
 bool ACaveboundPlayerController::IsMouseButtonHeld(const FKey& Button) const
@@ -879,25 +886,27 @@ bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) co
 	const FVector2D Mouse(MouseX, MouseY);
 
 	FVector Origin = Actor->GetActorLocation();
-	FVector Extent(40.f, 40.f, 80.f);
+	FVector Extent(35.f, 35.f, 70.f);
 
+	// Use visible meshes only — collision volumes made hover feel sticky/inaccurate.
 	FBox Combined(ForceInit);
 	bool bGotBounds = false;
-	TArray<UPrimitiveComponent*> Primitives;
-	Actor->GetComponents<UPrimitiveComponent>(Primitives);
-	for (const UPrimitiveComponent* Prim : Primitives)
+	TArray<UMeshComponent*> Meshes;
+	Actor->GetComponents<UMeshComponent>(Meshes);
+	for (const UMeshComponent* Mesh : Meshes)
 	{
-		if (!Prim || !Prim->IsRegistered() || Prim->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
+		if (!Mesh || !Mesh->IsRegistered() || Mesh->bHiddenInGame || !Mesh->IsVisible())
 		{
 			continue;
 		}
-		if (Prim->GetCollisionResponseToChannel(ECC_Visibility) != ECR_Block
-			&& Prim->GetCollisionResponseToChannel(ECC_WorldDynamic) != ECR_Block
-			&& Prim->GetCollisionResponseToChannel(ECC_WorldDynamic) != ECR_Overlap)
+		if (const UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Mesh))
 		{
-			continue;
+			if (!StaticMesh->GetStaticMesh())
+			{
+				continue;
+			}
 		}
-		Combined += Prim->Bounds.GetBox();
+		Combined += Mesh->Bounds.GetBox();
 		bGotBounds = true;
 	}
 
@@ -908,13 +917,13 @@ bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) co
 	}
 	else
 	{
-		Actor->GetActorBounds(false, Origin, Extent);
+		Actor->GetActorBounds(true, Origin, Extent);
 	}
 
-	// Cap world extent so oversized volumes can't claim half the screen.
-	Extent.X = FMath::Min(Extent.X, 100.f);
-	Extent.Y = FMath::Min(Extent.Y, 100.f);
-	Extent.Z = FMath::Min(Extent.Z, 180.f);
+	// Cap world extent so oversized meshes can't claim half the screen.
+	Extent.X = FMath::Min(Extent.X, 90.f);
+	Extent.Y = FMath::Min(Extent.Y, 90.f);
+	Extent.Z = FMath::Min(Extent.Z, 160.f);
 
 	FVector2D MinScreen(FLT_MAX, FLT_MAX);
 	FVector2D MaxScreen(-FLT_MAX, -FLT_MAX);
@@ -944,7 +953,7 @@ bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) co
 		return false;
 	}
 
-	const float Pad = 8.f;
+	const float Pad = 4.f;
 	MinScreen.X -= Pad;
 	MinScreen.Y -= Pad;
 	MaxScreen.X += Pad;
@@ -952,8 +961,8 @@ bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) co
 
 	const FVector2D Center = (MinScreen + MaxScreen) * 0.5f;
 	FVector2D Half = (MaxScreen - MinScreen) * 0.5f;
-	Half.X = FMath::Clamp(Half.X, 16.f, 80.f);
-	Half.Y = FMath::Clamp(Half.Y, 16.f, 120.f);
+	Half.X = FMath::Clamp(Half.X, 14.f, 70.f);
+	Half.Y = FMath::Clamp(Half.Y, 14.f, 100.f);
 
 	return Mouse.X >= Center.X - Half.X
 		&& Mouse.X <= Center.X + Half.X
@@ -961,9 +970,196 @@ bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) co
 		&& Mouse.Y <= Center.Y + Half.Y;
 }
 
+bool ACaveboundPlayerController::IsBuildSlotActor(const AActor* Actor) const
+{
+	if (!Actor)
+	{
+		return false;
+	}
+
+	static TWeakObjectPtr<UClass> SlotClass;
+	if (!SlotClass.IsValid())
+	{
+		SlotClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_BuildSlot.BP_BuildSlot_C"));
+	}
+	return SlotClass.IsValid() && Actor->IsA(SlotClass.Get());
+}
+
+FLinearColor ACaveboundPlayerController::GetHoverGlowColor(const AActor* Actor) const
+{
+	if (!Actor)
+	{
+		return FLinearColor::White;
+	}
+	if (Actor->IsA(ACaveboundTree::StaticClass()))
+	{
+		return FLinearColor(0.35f, 2.2f, 0.55f); // green
+	}
+	if (Actor->IsA(ACaveboundTurret::StaticClass()))
+	{
+		return FLinearColor(0.35f, 1.1f, 2.4f); // blue
+	}
+	if (Actor->IsA(ACaveboundRockDeposit::StaticClass()))
+	{
+		return FLinearColor(1.35f, 1.35f, 1.4f); // grey
+	}
+	if (IsBuildSlotActor(Actor))
+	{
+		return FLinearColor(2.f, 2.f, 2.f); // white
+	}
+	return FLinearColor(1.8f, 1.8f, 1.8f);
+}
+
+void ACaveboundPlayerController::ClearHoverGlow()
+{
+	AActor* Prev = HoverGlowActor.Get();
+	HoverGlowActor = nullptr;
+	if (!IsValid(Prev))
+	{
+		return;
+	}
+
+	TArray<UMeshComponent*> Meshes;
+	Prev->GetComponents<UMeshComponent>(Meshes);
+	for (UMeshComponent* Mesh : Meshes)
+	{
+		if (IsValid(Mesh))
+		{
+			Mesh->SetOverlayMaterial(nullptr);
+		}
+	}
+
+	// Nearby empty slots keep their soft white pad highlight.
+	const bool bStillNearby = HighlightedSlots.ContainsByPredicate(
+		[Prev](const TWeakObjectPtr<AActor>& Existing)
+		{
+			return Existing.Get() == Prev;
+		});
+	if (bStillNearby)
+	{
+		SetSlotHighlighted(Prev, true);
+	}
+}
+
+void ACaveboundPlayerController::ApplyHoverGlow(AActor* Actor, const FLinearColor& Color)
+{
+	if (!IsValid(Actor))
+	{
+		return;
+	}
+
+	// Rocks need the flat overlay path; enemies intentionally have hover info only (no glow).
+	const bool bRock = Actor->IsA(ACaveboundRockDeposit::StaticClass());
+
+	UMaterialInstanceDynamic* GlowMID = nullptr;
+	if (bRock)
+	{
+		if (!HoverGlowFillMaterial)
+		{
+			if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(
+				nullptr,
+				TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Translucent.Widget3DPassThrough_Translucent")))
+			{
+				HoverGlowFillMaterial = UMaterialInstanceDynamic::Create(Base, this);
+			}
+		}
+		GlowMID = HoverGlowFillMaterial;
+		if (GlowMID)
+		{
+			GlowMID->SetVectorParameterValue(
+				FName(TEXT("Color")),
+				FLinearColor(0.75f, 0.75f, 0.78f, 0.6f));
+		}
+	}
+	else
+	{
+		if (!HoverGlowMaterial)
+		{
+			HoverGlowMaterial = CaveboundShaderMaterials::CreateHoverOutlineMID(this);
+			if (!HoverGlowMaterial)
+			{
+				if (UMaterialInterface* Fallback = LoadObject<UMaterialInterface>(
+					nullptr,
+					TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Translucent.Widget3DPassThrough_Translucent")))
+				{
+					HoverGlowMaterial = UMaterialInstanceDynamic::Create(Fallback, this);
+				}
+			}
+		}
+		GlowMID = HoverGlowMaterial;
+		if (GlowMID)
+		{
+			const bool bBuildSlot = IsBuildSlotActor(Actor);
+			GlowMID->SetVectorParameterValue(TEXT("OutlineColor"), Color);
+			GlowMID->SetVectorParameterValue(TEXT("Color"), Color);
+			GlowMID->SetScalarParameterValue(TEXT("Intensity"), bBuildSlot ? 4.5f : 6.f);
+			GlowMID->SetScalarParameterValue(TEXT("OpacityBoost"), bBuildSlot ? 2.2f : 3.f);
+			GlowMID->SetScalarParameterValue(TEXT("Exponent"), bBuildSlot ? 2.f : 2.3f);
+			GlowMID->SetScalarParameterValue(TEXT("MinOpacity"), bBuildSlot ? 0.45f : 0.22f);
+		}
+	}
+
+	if (!GlowMID)
+	{
+		return;
+	}
+
+	TArray<UMeshComponent*> Meshes;
+	Actor->GetComponents<UMeshComponent>(Meshes);
+	for (UMeshComponent* Mesh : Meshes)
+	{
+		if (!IsValid(Mesh) || Mesh->bHiddenInGame || !Mesh->GetVisibleFlag())
+		{
+			continue;
+		}
+		if (UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Mesh))
+		{
+			if (!StaticMesh->GetStaticMesh())
+			{
+				continue;
+			}
+			StaticMesh->bDisallowNanite = true;
+		}
+		Mesh->SetOverlayMaterial(GlowMID);
+	}
+
+	HoverGlowActor = Actor;
+}
+
+void ACaveboundPlayerController::UpdateHoverGlow()
+{
+	AActor* Target = HoveredHealthActor.Get();
+	// Enemies keep hover info, but no glow.
+	if (Target && Target->IsA(ACaveboundBaseEnemy::StaticClass()))
+	{
+		Target = nullptr;
+	}
+	if (!IsValid(Target))
+	{
+		Target = HoveredBuildSlot.Get();
+	}
+	if (!IsValid(Target))
+	{
+		ClearHoverGlow();
+		return;
+	}
+
+	const FLinearColor Color = GetHoverGlowColor(Target);
+	if (HoverGlowActor.Get() != Target)
+	{
+		ClearHoverGlow();
+		ApplyHoverGlow(Target, Color);
+		return;
+	}
+
+	// Refresh so a damage flash clearing the overlay doesn't stick.
+	ApplyHoverGlow(Target, Color);
+}
+
 void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 {
 	HoveredHealthActor = nullptr;
+	HoveredBuildSlot = nullptr;
 
 	if (bOrbitingCamera || bPauseMenuOpen || IsPointerOverInteractiveUI())
 	{
@@ -1012,13 +1208,60 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 		{
 			continue;
 		}
+
 		if (AActor* HoverActor = FindHoverHealthActor(HitActor))
 		{
+			// Enemies use an invisible HitVolume for traces; Body is NoCollision.
+			// Gate on the visible silhouette instead of requiring a visible hit component.
 			if (IsCursorOverActorVisual(HoverActor))
 			{
 				HoveredHealthActor = HoverActor;
+				return;
 			}
+			continue;
+		}
+
+		if (IsBuildSlotActor(HitActor) && IsCursorOverActorVisual(HitActor))
+		{
+			HoveredBuildSlot = HitActor;
 			return;
+		}
+	}
+
+	// Empty nearby pads often fail the visibility trace (overlap-only collision).
+	if (!HoveredHealthActor.IsValid() && !HoveredBuildSlot.IsValid())
+	{
+		TArray<AActor*> NearbySlots;
+		AActor* Closest = nullptr;
+		CollectInteractableSlots(NearbySlots, Closest);
+
+		float MouseX = 0.f;
+		float MouseY = 0.f;
+		if (GetMousePosition(MouseX, MouseY))
+		{
+			const FVector2D Mouse(MouseX, MouseY);
+			AActor* BestSlot = nullptr;
+			float BestDistSq = TNumericLimits<float>::Max();
+			for (AActor* Slot : NearbySlots)
+			{
+				if (!IsCursorOverActorVisual(Slot))
+				{
+					continue;
+				}
+				FVector2D PixelPos;
+				const FVector WorldPos = Slot->GetActorLocation() + FVector(0.f, 0.f, 40.f);
+				if (!ProjectWorldLocationToScreen(WorldPos, PixelPos, true))
+				{
+					continue;
+				}
+				const float DistSq = FVector2D::DistSquared(PixelPos, Mouse);
+				if (DistSq < BestDistSq)
+				{
+					BestDistSq = DistSq;
+					BestSlot = Slot;
+				}
+			}
+			HoveredBuildSlot = BestSlot;
 		}
 	}
 }

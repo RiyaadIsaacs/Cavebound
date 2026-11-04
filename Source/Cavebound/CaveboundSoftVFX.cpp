@@ -73,23 +73,37 @@ ACaveboundSparkBurst::ACaveboundSparkBurst()
 	SetActorEnableCollision(false);
 }
 
-void ACaveboundSparkBurst::SpawnAt(UWorld* World, const FVector& Location, const FLinearColor& InColor)
+void ACaveboundSparkBurst::SpawnAt(
+	UWorld* World,
+	const FVector& Location,
+	const FLinearColor& InColor,
+	int32 InCount,
+	float InSizeScale)
 {
 	if (!World)
 	{
 		return;
 	}
 
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	if (ACaveboundSparkBurst* Burst = World->SpawnActor<ACaveboundSparkBurst>(
-			ACaveboundSparkBurst::StaticClass(),
-			Location,
-			FRotator::ZeroRotator,
-			Params))
+	const FTransform SpawnTM(FRotator::ZeroRotator, Location);
+	ACaveboundSparkBurst* Burst = World->SpawnActorDeferred<ACaveboundSparkBurst>(
+		ACaveboundSparkBurst::StaticClass(),
+		SpawnTM,
+		nullptr,
+		nullptr,
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Burst)
 	{
-		Burst->Color = InColor;
+		return;
 	}
+
+	Burst->Color = InColor;
+	if (InCount > 0)
+	{
+		Burst->Count = InCount;
+	}
+	Burst->SizeScale = FMath::Max(0.1f, InSizeScale);
+	Burst->FinishSpawning(SpawnTM);
 }
 
 void ACaveboundSparkBurst::BeginPlay()
@@ -97,13 +111,19 @@ void ACaveboundSparkBurst::BeginPlay()
 	Super::BeginPlay();
 
 	UStaticMesh* Mesh = SoftVFX::SphereMesh();
-	UMaterialInterface* BaseMat = SoftVFX::SoftMat();
+	// Prefer emissive so grey/colored sparks stay readable.
+	UMaterialInterface* BaseMat = SoftVFX::GlowMat();
+	if (!BaseMat)
+	{
+		BaseMat = SoftVFX::SoftMat();
+	}
 	if (!Mesh)
 	{
 		Destroy();
 		return;
 	}
 
+	const float Scale = FMath::Max(0.1f, SizeScale);
 	Balls.Reset();
 	Mats.Reset();
 	Speeds.Reset();
@@ -119,23 +139,26 @@ void ACaveboundSparkBurst::BeginPlay()
 			*FString::Printf(TEXT("Spark_%d"), i),
 			Mat);
 
-		const float Size = FMath::FRandRange(0.04f, 0.09f);
+		const float Size = FMath::FRandRange(0.04f, 0.09f) * Scale;
 		Ball->SetRelativeScale3D(FVector(Size));
 		Ball->SetRelativeLocation(FVector(
-			FMath::FRandRange(-12.f, 12.f),
-			FMath::FRandRange(-12.f, 12.f),
-			FMath::FRandRange(10.f, 40.f)));
+			FMath::FRandRange(-12.f, 12.f) * Scale,
+			FMath::FRandRange(-12.f, 12.f) * Scale,
+			FMath::FRandRange(10.f, 40.f) * Scale));
 
 		if (Mat)
 		{
 			FLinearColor Lit = Color * 2.2f;
 			Lit.A = 1.f;
 			Mat->SetVectorParameterValue(TEXT("Color"), Lit);
+			Mat->SetVectorParameterValue(TEXT("EmissiveColor"), Lit);
 		}
 
 		// Shoot outward + a bit upward.
 		const FVector Dir = FMath::VRand().GetSafeNormal();
-		Speeds.Add(Dir * FMath::FRandRange(220.f, 520.f) + FVector(0.f, 0.f, FMath::FRandRange(80.f, 220.f)));
+		Speeds.Add(
+			Dir * FMath::FRandRange(220.f, 520.f) * Scale
+			+ FVector(0.f, 0.f, FMath::FRandRange(80.f, 220.f) * Scale));
 		Balls.Add(Ball);
 		Mats.Add(Mat);
 	}
@@ -158,15 +181,17 @@ void ACaveboundSparkBurst::Tick(float DeltaTime)
 		}
 
 		// Gravity + move.
+		const float Scale = FMath::Max(0.1f, SizeScale);
 		Speeds[i] += FVector(0.f, 0.f, -650.f) * DeltaTime;
 		Ball->AddRelativeLocation(Speeds[i] * DeltaTime);
-		Ball->SetRelativeScale3D(FVector(FMath::Lerp(0.08f, 0.02f, T)));
+		Ball->SetRelativeScale3D(FVector(FMath::Lerp(0.08f, 0.02f, T) * Scale));
 
 		if (UMaterialInstanceDynamic* Mat = Mats.IsValidIndex(i) ? Mats[i] : nullptr)
 		{
 			FLinearColor Lit = Color * (0.6f + 1.8f * Fade);
 			Lit.A = Fade;
 			Mat->SetVectorParameterValue(TEXT("Color"), Lit);
+			Mat->SetVectorParameterValue(TEXT("EmissiveColor"), Lit);
 			Mat->SetScalarParameterValue(TEXT("Opacity"), Fade);
 		}
 	}

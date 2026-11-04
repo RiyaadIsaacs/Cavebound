@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "CaveboundHoverHealth.h"
 #include "CaveboundRockDeposit.generated.h"
 
 class USceneComponent;
@@ -13,7 +14,7 @@ class UCaveboundHarvestBar;
  * A rock pile the player mines. Bigger piles take longer and then rest for a few waves.
  */
 UCLASS()
-class CAVEBOUND_API ACaveboundRockDeposit : public AActor
+class CAVEBOUND_API ACaveboundRockDeposit : public AActor, public ICaveboundHoverHealth
 {
 	GENERATED_BODY()
 
@@ -21,6 +22,10 @@ public:
 	ACaveboundRockDeposit();
 
 	virtual void BeginPlay() override;
+
+	virtual float GetHoverHealth_Implementation() const override { return static_cast<float>(RockRemaining); }
+	virtual float GetHoverMaxHealth_Implementation() const override { return static_cast<float>(RockTotal); }
+	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Rock")); }
 
 	bool IsHarvestable() const { return !bDepleted; }
 	float GetMineRange() const { return MineRange; }
