@@ -5,9 +5,10 @@
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 
 void UCaveboundResourceReadout::NativeOnInitialized()
@@ -25,30 +26,42 @@ void UCaveboundResourceReadout::NativeOnInitialized()
 	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	WidgetTree->RootWidget = Canvas;
 
-	UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ResourceFrame"));
-	Frame->SetPadding(FMargin(14.f, 10.f));
-	Frame->SetBrushColor(CaveboundUIStyle::PanelBg());
-	Frame->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("ResourceRow"));
 
-	UVerticalBox* Body = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ResourceBody"));
-	Frame->SetContent(Body);
-
-	WoodText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("WoodText"));
-	WoodText->SetText(FText::FromString(TEXT("Wood: 0")));
-	WoodText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
-	WoodText->SetFont(CaveboundUIStyle::Font(16));
-	if (UVerticalBoxSlot* WoodSlot = Body->AddChildToVerticalBox(WoodText))
+	auto MakeCounter = [this, Row](const FName TextName, TObjectPtr<UTextBlock>& OutText, const FString& Initial)
 	{
-		WoodSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
-	}
+		UBorder* Plate = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Plate->SetPadding(FMargin(16.f, 8.f, 16.f, 10.f));
+		Plate->SetBrush(CaveboundUIStyle::MakeCounterBrush());
+		Plate->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Plate->SetHorizontalAlignment(HAlign_Center);
+		Plate->SetVerticalAlignment(VAlign_Center);
 
-	RockText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("RockText"));
-	RockText->SetText(FText::FromString(TEXT("Rock: 0")));
-	RockText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
-	RockText->SetFont(CaveboundUIStyle::Font(16));
-	Body->AddChildToVerticalBox(RockText);
+		OutText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TextName);
+		OutText->SetText(FText::FromString(Initial));
+		OutText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
+		OutText->SetFont(CaveboundUIStyle::Font(18));
+		OutText->SetJustification(ETextJustify::Center);
+		OutText->SetShadowColorAndOpacity(FLinearColor(0.15f, 0.1f, 0.08f, 0.55f));
+		OutText->SetShadowOffset(FVector2D(1.f, 1.f));
+		Plate->SetContent(OutText);
 
-	PanelSlot = Canvas->AddChildToCanvas(Frame);
+		USizeBox* MinWidth = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		MinWidth->SetMinDesiredWidth(132.f);
+		MinWidth->SetHeightOverride(44.f);
+		MinWidth->SetContent(Plate);
+
+		if (UHorizontalBoxSlot* PlateSlot = Row->AddChildToHorizontalBox(MinWidth))
+		{
+			PlateSlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
+			PlateSlot->SetVerticalAlignment(VAlign_Center);
+		}
+	};
+
+	MakeCounter(TEXT("WoodText"), WoodText, TEXT("Wood  0"));
+	MakeCounter(TEXT("RockText"), RockText, TEXT("Rock  0"));
+
+	PanelSlot = Canvas->AddChildToCanvas(Row);
 	if (PanelSlot)
 	{
 		PanelSlot->SetAnchors(FAnchors(0.f, 0.f));
@@ -73,10 +86,10 @@ void UCaveboundResourceReadout::Refresh()
 
 	if (WoodText)
 	{
-		WoodText->SetText(FText::FromString(FString::Printf(TEXT("Wood: %d"), Wood)));
+		WoodText->SetText(FText::FromString(FString::Printf(TEXT("Wood  %d"), Wood)));
 	}
 	if (RockText)
 	{
-		RockText->SetText(FText::FromString(FString::Printf(TEXT("Rock: %d"), Rock)));
+		RockText->SetText(FText::FromString(FString::Printf(TEXT("Rock  %d"), Rock)));
 	}
 }

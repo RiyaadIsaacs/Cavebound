@@ -4,11 +4,14 @@
 #include "CaveboundCharacter.h"
 #include "CaveboundDefenderMenu.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundDamageVignette.h"
 #include "CaveboundHoverHealth.h"
 #include "CaveboundHoverInfo.h"
 #include "CaveboundPlaceBeamVFX.h"
 #include "CaveboundResourceReadout.h"
 #include "CaveboundUIStyle.h"
+#include "Engine/PostProcessVolume.h"
+#include "EngineUtils.h"
 #include "CaveboundRockDeposit.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
@@ -17,6 +20,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/Widget.h"
 #include "Components/Button.h"
@@ -31,6 +35,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ProgressBar.h"
+#include "Components/SizeBox.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -118,6 +123,21 @@ void ACaveboundPlayerController::ShowHUD()
 			HoverInfo->AddToViewport(5);
 		}
 	}
+
+	EnsureDamageVignette();
+
+	// Clear leftover outline post-process volumes from earlier attempts.
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<APostProcessVolume> It(World); It; ++It)
+		{
+			APostProcessVolume* Volume = *It;
+			if (Volume && Volume->bUnbound && FMath::IsNearlyEqual(Volume->Priority, 50.f))
+			{
+				Volume->Destroy();
+			}
+		}
+	}
 }
 
 void ACaveboundPlayerController::CreateSkipCountdownButton()
@@ -132,6 +152,17 @@ void ACaveboundPlayerController::CreateSkipCountdownButton()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("CreateSkipCountdownButton: StartWaveButton was not found in the HUD"));
 		return;
+	}
+	CaveboundUIStyle::ApplyRectButtonStyle(StartWaveButton);
+	if (UTextBlock* StartWaveLabel = Cast<UTextBlock>(StartWaveButton->GetChildAt(0)))
+	{
+		StartWaveLabel->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
+		StartWaveLabel->SetFont(CaveboundUIStyle::Font(13));
+	}
+	if (UCanvasPanelSlot* StartSlot = Cast<UCanvasPanelSlot>(StartWaveButton->Slot))
+	{
+		const FVector2D StartSize = StartSlot->GetSize();
+		StartSlot->SetSize(FVector2D(FMath::Max(StartSize.X, 240.f), 72.f));
 	}
 
 	SkipCountdownCanvas = Cast<UCanvasPanel>(HUDWidget->WidgetTree->RootWidget);
@@ -148,30 +179,21 @@ void ACaveboundPlayerController::CreateSkipCountdownButton()
 	SkipCountdownButton = HUDWidget->WidgetTree->ConstructWidget<UButton>(
 		UButton::StaticClass(),
 		TEXT("SkipCountdownButton"));
-	SkipCountdownButton->SetStyle(StartWaveButton->GetStyle());
-	SkipCountdownButton->SetColorAndOpacity(StartWaveButton->GetColorAndOpacity());
+	CaveboundUIStyle::ApplyRectButtonStyle(SkipCountdownButton);
 
 	UTextBlock* Label = HUDWidget->WidgetTree->ConstructWidget<UTextBlock>(
 		UTextBlock::StaticClass(),
 		TEXT("SkipCountdownLabel"));
 	Label->SetText(FText::FromString(TEXT("Skip Countdown")));
 	Label->SetJustification(ETextJustify::Center);
-	if (UTextBlock* StartWaveLabel = Cast<UTextBlock>(StartWaveButton->GetChildAt(0)))
-	{
-		Label->SetFont(StartWaveLabel->GetFont());
-		Label->SetColorAndOpacity(StartWaveLabel->GetColorAndOpacity());
-		Label->SetShadowColorAndOpacity(StartWaveLabel->GetShadowColorAndOpacity());
-		Label->SetShadowOffset(StartWaveLabel->GetShadowOffset());
-	}
+	Label->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
+	Label->SetFont(CaveboundUIStyle::Font(13));
 	SkipCountdownButton->AddChild(Label);
 	if (UButtonSlot* ButtonSlot = Cast<UButtonSlot>(SkipCountdownButton->GetContentSlot()))
 	{
-		if (UButtonSlot* StartWaveButtonSlot = Cast<UButtonSlot>(StartWaveButton->GetContentSlot()))
-		{
-			ButtonSlot->SetHorizontalAlignment(StartWaveButtonSlot->GetHorizontalAlignment());
-			ButtonSlot->SetVerticalAlignment(StartWaveButtonSlot->GetVerticalAlignment());
-			ButtonSlot->SetPadding(StartWaveButtonSlot->GetPadding());
-		}
+		ButtonSlot->SetHorizontalAlignment(HAlign_Center);
+		ButtonSlot->SetVerticalAlignment(VAlign_Center);
+		ButtonSlot->SetPadding(FMargin(4.f, 0.f));
 	}
 
 	SkipCountdownButtonSlot = SkipCountdownCanvas->AddChildToCanvas(SkipCountdownButton);
@@ -263,35 +285,19 @@ void ACaveboundPlayerController::CreateSpeedButtons()
 	auto MakeSpeedButton = [this](const FName Name, const FText& Label) -> UButton*
 	{
 		UButton* Button = HUDWidget->WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
-		if (StartWaveButton)
-		{
-			Button->SetStyle(StartWaveButton->GetStyle());
-			Button->SetColorAndOpacity(StartWaveButton->GetColorAndOpacity());
-		}
-		else
-		{
-			Button->SetBackgroundColor(CaveboundUIStyle::ButtonBg());
-		}
+		CaveboundUIStyle::ApplySquareButtonStyle(Button);
 
 		UTextBlock* Text = HUDWidget->WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		Text->SetText(Label);
 		Text->SetJustification(ETextJustify::Center);
-		Text->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
-		Text->SetFont(CaveboundUIStyle::Font(14));
-		if (StartWaveButton)
-		{
-			if (UTextBlock* StartLabel = Cast<UTextBlock>(StartWaveButton->GetChildAt(0)))
-			{
-				Text->SetFont(StartLabel->GetFont());
-				Text->SetColorAndOpacity(StartLabel->GetColorAndOpacity());
-			}
-		}
+		Text->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
+		Text->SetFont(CaveboundUIStyle::Font(13));
 		Button->AddChild(Text);
-		if (UButtonSlot* Slot = Cast<UButtonSlot>(Button->GetContentSlot()))
+		if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(Button->GetContentSlot()))
 		{
-			Slot->SetHorizontalAlignment(HAlign_Center);
-			Slot->SetVerticalAlignment(VAlign_Center);
-			Slot->SetPadding(FMargin(8.f, 4.f));
+			ContentSlot->SetHorizontalAlignment(HAlign_Center);
+			ContentSlot->SetVerticalAlignment(VAlign_Center);
+			ContentSlot->SetPadding(FMargin(0.f));
 		}
 		return Button;
 	};
@@ -304,12 +310,16 @@ void ACaveboundPlayerController::CreateSpeedButtons()
 	SpeedButton2 = MakeSpeedButton(TEXT("SpeedButton2"), FText::FromString(TEXT("x2")));
 	SpeedButton3 = MakeSpeedButton(TEXT("SpeedButton3"), FText::FromString(TEXT("x3")));
 
-	auto AddToRow = [Row](UButton* Button)
+	auto AddToRow = [this, Row](UButton* Button)
 	{
-		if (UHorizontalBoxSlot* Slot = Row->AddChildToHorizontalBox(Button))
+		USizeBox* Size = HUDWidget->WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		Size->SetWidthOverride(64.f);
+		Size->SetHeightOverride(64.f);
+		Size->SetContent(Button);
+		if (UHorizontalBoxSlot* Slot = Row->AddChildToHorizontalBox(Size))
 		{
-			Slot->SetPadding(FMargin(4.f, 0.f));
-			Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			Slot->SetPadding(FMargin(6.f, 0.f));
+			Slot->SetVerticalAlignment(VAlign_Center);
 		}
 	};
 	AddToRow(SpeedButton1);
@@ -350,7 +360,9 @@ void ACaveboundPlayerController::RefreshSpeedButtonStyles()
 		{
 			return;
 		}
-		Button->SetBackgroundColor(bActive ? CaveboundUIStyle::ButtonBgActive() : CaveboundUIStyle::ButtonBg());
+		CaveboundUIStyle::ApplySquareButtonStyle(Button);
+		// Active speed reads a bit brighter.
+		Button->SetColorAndOpacity(bActive ? FLinearColor(1.15f, 1.1f, 0.95f, 1.f) : FLinearColor::White);
 	};
 
 	StyleButton(SpeedButton1, FMath::IsNearlyEqual(GameSpeed, 1.f));
@@ -592,6 +604,10 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 		RockReadout->Refresh();
 	}
 	UpdateSkipCountdownButton();
+	if (DamageVignette)
+	{
+		DamageVignette->TickFade(DeltaTime);
+	}
 
 	if (bPauseMenuOpen)
 	{
@@ -801,7 +817,8 @@ AActor* ACaveboundPlayerController::TraceActorUnderCursor() const
 		return nullptr;
 	}
 
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(CursorTrace), false, GetPawn());
+	// Complex mesh hits so big simplified collisions don't keep "hovering" after you leave.
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(CursorTrace), /*bTraceComplex*/ true, GetPawn());
 	const FVector TraceEnd = WorldLocation + WorldDirection * 100000.f;
 
 	TArray<FHitResult> Hits;
@@ -823,26 +840,209 @@ AActor* ACaveboundPlayerController::TraceActorUnderCursor() const
 	return nullptr;
 }
 
-void ACaveboundPlayerController::UpdateHoveredHealthTarget()
+static AActor* FindHoverHealthActor(AActor* Start)
 {
-	if (bOrbitingCamera || bPauseMenuOpen)
-	{
-		HoveredHealthActor = nullptr;
-		return;
-	}
-
-	HoveredHealthActor = nullptr;
-
-	AActor* HitActor = TraceActorUnderCursor();
-	AActor* Candidate = HitActor;
+	AActor* Candidate = Start;
 	while (Candidate)
 	{
 		if (Candidate->Implements<UCaveboundHoverHealth>())
 		{
-			HoveredHealthActor = Candidate;
+			return Candidate;
+		}
+		AActor* Next = Candidate->GetAttachParentActor();
+		if (!Next)
+		{
+			Next = Candidate->GetOwner();
+		}
+		if (Next == Candidate)
+		{
+			break;
+		}
+		Candidate = Next;
+	}
+	return nullptr;
+}
+
+bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) const
+{
+	if (!Actor)
+	{
+		return false;
+	}
+
+	float MouseX = 0.f;
+	float MouseY = 0.f;
+	if (!GetMousePosition(MouseX, MouseY))
+	{
+		return false;
+	}
+	const FVector2D Mouse(MouseX, MouseY);
+
+	FVector Origin = Actor->GetActorLocation();
+	FVector Extent(40.f, 40.f, 80.f);
+
+	FBox Combined(ForceInit);
+	bool bGotBounds = false;
+	TArray<UPrimitiveComponent*> Primitives;
+	Actor->GetComponents<UPrimitiveComponent>(Primitives);
+	for (const UPrimitiveComponent* Prim : Primitives)
+	{
+		if (!Prim || !Prim->IsRegistered() || Prim->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
+		{
+			continue;
+		}
+		if (Prim->GetCollisionResponseToChannel(ECC_Visibility) != ECR_Block
+			&& Prim->GetCollisionResponseToChannel(ECC_WorldDynamic) != ECR_Block
+			&& Prim->GetCollisionResponseToChannel(ECC_WorldDynamic) != ECR_Overlap)
+		{
+			continue;
+		}
+		Combined += Prim->Bounds.GetBox();
+		bGotBounds = true;
+	}
+
+	if (bGotBounds)
+	{
+		Origin = Combined.GetCenter();
+		Extent = Combined.GetExtent();
+	}
+	else
+	{
+		Actor->GetActorBounds(false, Origin, Extent);
+	}
+
+	// Cap world extent so oversized volumes can't claim half the screen.
+	Extent.X = FMath::Min(Extent.X, 100.f);
+	Extent.Y = FMath::Min(Extent.Y, 100.f);
+	Extent.Z = FMath::Min(Extent.Z, 180.f);
+
+	FVector2D MinScreen(FLT_MAX, FLT_MAX);
+	FVector2D MaxScreen(-FLT_MAX, -FLT_MAX);
+	int32 Projected = 0;
+	for (int32 IX = -1; IX <= 1; IX += 2)
+	{
+		for (int32 IY = -1; IY <= 1; IY += 2)
+		{
+			for (int32 IZ = -1; IZ <= 1; IZ += 2)
+			{
+				const FVector Corner = Origin + FVector(Extent.X * IX, Extent.Y * IY, Extent.Z * IZ);
+				FVector2D Screen;
+				if (ProjectWorldLocationToScreen(Corner, Screen, true))
+				{
+					MinScreen.X = FMath::Min(MinScreen.X, Screen.X);
+					MinScreen.Y = FMath::Min(MinScreen.Y, Screen.Y);
+					MaxScreen.X = FMath::Max(MaxScreen.X, Screen.X);
+					MaxScreen.Y = FMath::Max(MaxScreen.Y, Screen.Y);
+					++Projected;
+				}
+			}
+		}
+	}
+
+	if (Projected < 2)
+	{
+		return false;
+	}
+
+	const float Pad = 8.f;
+	MinScreen.X -= Pad;
+	MinScreen.Y -= Pad;
+	MaxScreen.X += Pad;
+	MaxScreen.Y += Pad;
+
+	const FVector2D Center = (MinScreen + MaxScreen) * 0.5f;
+	FVector2D Half = (MaxScreen - MinScreen) * 0.5f;
+	Half.X = FMath::Clamp(Half.X, 16.f, 80.f);
+	Half.Y = FMath::Clamp(Half.Y, 16.f, 120.f);
+
+	return Mouse.X >= Center.X - Half.X
+		&& Mouse.X <= Center.X + Half.X
+		&& Mouse.Y >= Center.Y - Half.Y
+		&& Mouse.Y <= Center.Y + Half.Y;
+}
+
+void ACaveboundPlayerController::UpdateHoveredHealthTarget()
+{
+	HoveredHealthActor = nullptr;
+
+	if (bOrbitingCamera || bPauseMenuOpen || IsPointerOverInteractiveUI())
+	{
+		return;
+	}
+
+	if ((BuildMenu && BuildMenu->IsInViewport())
+		|| (DefenderMenu && DefenderMenu->IsInViewport()))
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	FVector WorldLocation;
+	FVector WorldDirection;
+	if (!DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
+	{
+		return;
+	}
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(HoverHealthTrace), /*bTraceComplex*/ true, GetPawn());
+	const FVector TraceEnd = WorldLocation + WorldDirection * 100000.f;
+
+	TArray<FHitResult> Hits;
+	World->LineTraceMultiByChannel(Hits, WorldLocation, TraceEnd, ECC_Visibility, Params);
+	{
+		TArray<FHitResult> DynamicHits;
+		World->LineTraceMultiByChannel(DynamicHits, WorldLocation, TraceEnd, ECC_WorldDynamic, Params);
+		Hits.Append(DynamicHits);
+	}
+
+	Hits.Sort([](const FHitResult& A, const FHitResult& B)
+	{
+		return A.Distance < B.Distance;
+	});
+
+	for (const FHitResult& Hit : Hits)
+	{
+		AActor* HitActor = Hit.GetActor();
+		if (!IsValid(HitActor) || HitActor == GetPawn())
+		{
+			continue;
+		}
+		if (AActor* HoverActor = FindHoverHealthActor(HitActor))
+		{
+			if (IsCursorOverActorVisual(HoverActor))
+			{
+				HoveredHealthActor = HoverActor;
+			}
 			return;
 		}
-		Candidate = Candidate->GetAttachParentActor();
+	}
+}
+
+void ACaveboundPlayerController::EnsureDamageVignette()
+{
+	if (DamageVignette)
+	{
+		return;
+	}
+
+	DamageVignette = CreateWidget<UCaveboundDamageVignette>(this, UCaveboundDamageVignette::StaticClass());
+	if (DamageVignette)
+	{
+		DamageVignette->AddToViewport(30);
+	}
+}
+
+void ACaveboundPlayerController::PulseDamageVignette()
+{
+	EnsureDamageVignette();
+	if (DamageVignette)
+	{
+		DamageVignette->Pulse(0.8f, 0.6f);
 	}
 }
 

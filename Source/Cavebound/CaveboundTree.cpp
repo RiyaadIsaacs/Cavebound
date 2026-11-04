@@ -1,12 +1,16 @@
 #include "CaveboundTree.h"
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundPlayerController.h"
 #include "CaveboundSoftVFX.h"
 #include "CaveboundTreeProjectile.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInterface.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "UObject/ConstructorHelpers.h"
 
 ACaveboundTree::ACaveboundTree()
@@ -19,30 +23,37 @@ ACaveboundTree::ACaveboundTree()
 
 	TrunkMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TrunkMesh"));
 	TrunkMesh->SetupAttachment(SceneRoot);
-	TrunkMesh->SetRelativeLocation(FVector(0.f, 0.f, 150.f));
-	TrunkMesh->SetRelativeScale3D(FVector(0.7f, 0.7f, 3.0f));
+	TrunkMesh->SetRelativeLocation(FVector::ZeroVector);
+	TrunkMesh->SetRelativeScale3D(FVector::OneVector);
 	TrunkMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	TrunkMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	TrunkMesh->SetCollisionResponseToAllChannels(ECR_Block);
 
+	// Legacy slot — never show the old sphere/cylinder canopy.
 	CanopyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CanopyMesh"));
 	CanopyMesh->SetupAttachment(SceneRoot);
-	CanopyMesh->SetRelativeLocation(FVector(0.f, 0.f, 380.f));
-	CanopyMesh->SetRelativeScale3D(FVector(3.2f, 3.2f, 2.4f));
-	CanopyMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	CanopyMesh->SetCollisionResponseToAllChannels(ECR_Block);
+	CanopyMesh->SetStaticMesh(nullptr);
+	CanopyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CanopyMesh->SetHiddenInGame(true);
+	CanopyMesh->SetVisibility(false);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(
-		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (CylinderMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> TreeMeshAsset(
+		TEXT("/Game/Assets/Models/Tree/Tree.Tree"));
+	if (TreeMeshAsset.Succeeded())
 	{
-		TrunkMesh->SetStaticMesh(CylinderMesh.Object);
+		TrunkMesh->SetStaticMesh(TreeMeshAsset.Object);
+		if (UBodySetup* BodySetup = TreeMeshAsset.Object->GetBodySetup())
+		{
+			// Avoid a huge auto-convex "cylinder" trap around the whole tree.
+			BodySetup->CollisionTraceFlag = CTF_UseComplexAsSimple;
+		}
 	}
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(
-		TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	if (SphereMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> TreeMaterialAsset(
+		TEXT("/Game/Assets/Models/Tree/M_Tree.M_Tree"));
+	if (TreeMaterialAsset.Succeeded())
 	{
-		CanopyMesh->SetStaticMesh(SphereMesh.Object);
+		TrunkMesh->SetMaterial(0, TreeMaterialAsset.Object);
 	}
 
 	Health = MaxHealth;
@@ -52,14 +63,59 @@ void ACaveboundTree::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Soft deep warm-green orbs that drift around the canopy.
+	if (CanopyMesh)
+	{
+		CanopyMesh->SetStaticMesh(nullptr);
+		CanopyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		CanopyMesh->SetHiddenInGame(true);
+		CanopyMesh->SetVisibility(false);
+	}
+
+	if (TrunkMesh)
+	{
+		if (UStaticMesh* Mesh = TrunkMesh->GetStaticMesh())
+		{
+			if (UBodySetup* BodySetup = Mesh->GetBodySetup())
+			{
+				BodySetup->CollisionTraceFlag = CTF_UseComplexAsSimple;
+			}
+
+			const FBoxSphereBounds Bounds = Mesh->GetBounds();
+			const float BottomZ = Bounds.Origin.Z - Bounds.BoxExtent.Z;
+			TrunkMesh->SetRelativeLocation(FVector(0.f, 0.f, -BottomZ));
+		}
+
+		if (UMaterialInterface* TreeMat = LoadObject<UMaterialInterface>(
+				nullptr, TEXT("/Game/Assets/Models/Tree/M_Tree.M_Tree")))
+		{
+			const int32 NumMaterials = TrunkMesh->GetNumMaterials();
+			for (int32 Index = 0; Index < FMath::Max(1, NumMaterials); ++Index)
+			{
+				TrunkMesh->SetMaterial(Index, TreeMat);
+			}
+		}
+
+		TrunkMesh->RecreatePhysicsState();
+	}
+
+	const float EmberHeight = GetCanopyHeight() * 0.72f;
 	if (!GreenEmbers)
 	{
 		GreenEmbers = ACaveboundHoverEmbers::SpawnAttached(
 			this,
-			FVector(0.f, 0.f, 320.f),
+			FVector(0.f, 0.f, EmberHeight),
 			FLinearColor(0.18f, 0.42f, 0.12f, 1.f));
 	}
+}
+
+float ACaveboundTree::GetCanopyHeight() const
+{
+	if (TrunkMesh && TrunkMesh->GetStaticMesh())
+	{
+		const FBoxSphereBounds Bounds = TrunkMesh->Bounds;
+		return FMath::Max(120.f, Bounds.Origin.Z + Bounds.BoxExtent.Z - GetActorLocation().Z);
+	}
+	return 420.f;
 }
 
 void ACaveboundTree::ApplyDamage(float Amount)
@@ -71,6 +127,12 @@ void ACaveboundTree::ApplyDamage(float Amount)
 
 	Health = FMath::Max(0.f, Health - Amount);
 	PlayDamageFlash();
+
+	if (ACaveboundPlayerController* PC = Cast<ACaveboundPlayerController>(
+			UGameplayStatics::GetPlayerController(GetWorld(), 0)))
+	{
+		PC->PulseDamageVignette();
+	}
 
 	if (Health <= 0.f)
 	{
@@ -202,7 +264,7 @@ void ACaveboundTree::TryFireAtNearestEnemy()
 		return;
 	}
 
-	const FVector SpawnLocation = GetActorLocation() + FVector(0.f, 0.f, 420.f);
+	const FVector SpawnLocation = GetActorLocation() + FVector(0.f, 0.f, GetCanopyHeight() * 0.85f);
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	SpawnParams.Owner = this;

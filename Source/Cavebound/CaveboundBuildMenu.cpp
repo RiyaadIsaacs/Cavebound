@@ -8,6 +8,7 @@
 #include "CaveboundSnare.h"
 #include "CaveboundTurret.h"
 #include "CaveboundUIStyle.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -47,19 +48,21 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 
 	UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BuildMenuFrame"));
 	FrameWidget = Frame;
-	Frame->SetPadding(FMargin(16.f, 12.f));
-	Frame->SetBrushColor(CaveboundUIStyle::PanelBg());
+	Frame->SetPadding(FMargin(22.f, 18.f, 22.f, 20.f));
+	Frame->SetBrush(CaveboundUIStyle::MakePanelBrush());
 
 	UVerticalBox* Body = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BuildMenuBody"));
 	Frame->SetContent(Body);
 
 	UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildMenuTitle"));
 	Title->SetText(FText::FromString(TEXT("Choose a defender")));
-	Title->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
-	Title->SetFont(CaveboundUIStyle::Font(16));
+	Title->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
+	Title->SetFont(CaveboundUIStyle::Font(18));
+	Title->SetShadowColorAndOpacity(FLinearColor(0.12f, 0.08f, 0.06f, 0.5f));
+	Title->SetShadowOffset(FVector2D(1.f, 1.f));
 	if (UVerticalBoxSlot* TitleSlot = Body->AddChildToVerticalBox(Title))
 	{
-		TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+		TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	}
 
 	WoodText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildMenuWood"));
@@ -67,7 +70,7 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 	WoodText->SetFont(CaveboundUIStyle::Font(14));
 	if (UVerticalBoxSlot* WoodSlot = Body->AddChildToVerticalBox(WoodText))
 	{
-		WoodSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+		WoodSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 	}
 
 	ChoiceBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BuildMenuChoices"));
@@ -82,7 +85,7 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 	}
 
 	USizeBox* MenuSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BuildMenuSize"));
-	MenuSize->SetMinDesiredWidth(220.f);
+	MenuSize->SetMinDesiredWidth(320.f);
 	MenuSize->SetContent(Frame);
 
 	PanelSlot = Canvas->AddChildToCanvas(MenuSize);
@@ -96,10 +99,30 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 
 void UCaveboundBuildMenu::SetHoverScreenPosition(FVector2D Position)
 {
-	if (PanelSlot)
+	if (!PanelSlot)
 	{
-		PanelSlot->SetPosition(Position);
+		return;
 	}
+
+	// Alignment is bottom-center of the menu.
+	FVector2D MenuSize = FrameWidget
+		? FrameWidget->GetCachedGeometry().GetLocalSize()
+		: FVector2D(320.f, 420.f);
+	if (MenuSize.X < 1.f || MenuSize.Y < 1.f)
+	{
+		MenuSize = FVector2D(320.f, 420.f);
+	}
+
+	const float Scale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), 0.01f);
+	const FVector2D Viewport = UWidgetLayoutLibrary::GetViewportSize(this) / Scale;
+	const float Pad = 16.f;
+
+	float X = Position.X;
+	float Y = Position.Y;
+	X = FMath::Clamp(X, Pad + MenuSize.X * 0.5f, Viewport.X - Pad - MenuSize.X * 0.5f);
+	Y = FMath::Clamp(Y, Pad + MenuSize.Y, Viewport.Y - Pad);
+
+	PanelSlot->SetPosition(FVector2D(X, Y));
 }
 
 void UCaveboundBuildMenu::SetHoverVisible(bool bVisible)
@@ -183,35 +206,38 @@ void UCaveboundBuildMenu::AddChoice(const FString& Label, TSubclassOf<AActor> De
 	const int32 Cost = ACaveboundTurret::GetCostForClass(DefenderClass);
 
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
-	Button->SetBackgroundColor(CaveboundUIStyle::ButtonBg());
+	CaveboundUIStyle::ApplyRectButtonStyle(Button);
 
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Button->AddChild(Row);
 	if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(Button->GetContentSlot()))
 	{
 		ContentSlot->SetHorizontalAlignment(HAlign_Fill);
-		ContentSlot->SetPadding(FMargin(8.f, 6.f));
+		ContentSlot->SetVerticalAlignment(VAlign_Center);
+		ContentSlot->SetPadding(FMargin(4.f, 0.f));
 	}
 
 	UTextBlock* LabelText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 	LabelText->SetText(FText::FromString(Label));
-	LabelText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
-	LabelText->SetFont(CaveboundUIStyle::Font(14));
+	LabelText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
+	LabelText->SetFont(CaveboundUIStyle::Font(13));
 	LabelText->SetJustification(ETextJustify::Left);
 	if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelText))
 	{
 		LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		LabelSlot->SetVerticalAlignment(VAlign_Center);
 	}
 
 	UTextBlock* CostText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 	CostText->SetText(FText::FromString(FString::Printf(TEXT("%d wood"), Cost)));
-	CostText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
-	CostText->SetFont(CaveboundUIStyle::Font(14));
+	CostText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
+	CostText->SetFont(CaveboundUIStyle::Font(12));
 	CostText->SetJustification(ETextJustify::Right);
 	if (UHorizontalBoxSlot* CostSlot = Row->AddChildToHorizontalBox(CostText))
 	{
 		CostSlot->SetHorizontalAlignment(HAlign_Right);
-		CostSlot->SetPadding(FMargin(16.f, 0.f, 0.f, 0.f));
+		CostSlot->SetVerticalAlignment(VAlign_Center);
+		CostSlot->SetPadding(FMargin(10.f, 0.f, 0.f, 0.f));
 	}
 
 	UCaveboundBuildChoiceProxy* Proxy = NewObject<UCaveboundBuildChoiceProxy>(this);
@@ -220,7 +246,11 @@ void UCaveboundBuildMenu::AddChoice(const FString& Label, TSubclassOf<AActor> De
 	ChoiceProxies.Add(Proxy);
 	Button->OnClicked.AddDynamic(Proxy, &UCaveboundBuildChoiceProxy::HandleClicked);
 
-	if (UVerticalBoxSlot* ButtonSlot = ChoiceBox->AddChildToVerticalBox(Button))
+	USizeBox* ButtonSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+	ButtonSize->SetHeightOverride(72.f);
+	ButtonSize->SetContent(Button);
+
+	if (UVerticalBoxSlot* ButtonSlot = ChoiceBox->AddChildToVerticalBox(ButtonSize))
 	{
 		ButtonSlot->SetPadding(FMargin(0.f, 4.f));
 	}

@@ -26,26 +26,34 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 	WidgetTree->RootWidget = Canvas;
 
 	Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HoverFrame"));
-	Frame->SetPadding(FMargin(12.f, 8.f));
-	Frame->SetBrushColor(CaveboundUIStyle::PanelBg());
+	Frame->SetPadding(FMargin(16.f, 12.f, 16.f, 14.f));
+	Frame->SetBrush(CaveboundUIStyle::MakePanelBrush());
 	Frame->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
 	UVerticalBox* Body = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("HoverBody"));
 	Frame->SetContent(Body);
 
 	NameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("HoverName"));
-	NameText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Title()));
+	NameText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
 	NameText->SetFont(CaveboundUIStyle::Font(16));
+	NameText->SetShadowColorAndOpacity(FLinearColor(0.12f, 0.08f, 0.06f, 0.5f));
+	NameText->SetShadowOffset(FVector2D(1.f, 1.f));
 	if (UVerticalBoxSlot* NameSlot = Body->AddChildToVerticalBox(NameText))
 	{
-		NameSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+		NameSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	}
 
 	USizeBox* BarSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("HoverBarSize"));
-	BarSize->SetWidthOverride(160.f);
-	BarSize->SetHeightOverride(12.f);
+	BarSize->SetWidthOverride(168.f);
+	BarSize->SetHeightOverride(22.f);
 	HealthBar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), TEXT("HoverBar"));
-	HealthBar->SetFillColorAndOpacity(CaveboundUIStyle::HealthFill());
+	{
+		FProgressBarStyle BarStyle = HealthBar->GetWidgetStyle();
+		BarStyle.BackgroundImage = CaveboundUIStyle::MakeBarBackgroundBrush();
+		BarStyle.FillImage = CaveboundUIStyle::MakeBarFillBrush();
+		HealthBar->SetWidgetStyle(BarStyle);
+	}
+	HealthBar->SetFillColorAndOpacity(FLinearColor::White);
 	HealthBar->SetPercent(1.f);
 	BarSize->SetContent(HealthBar);
 	if (UVerticalBoxSlot* BarSlot = Body->AddChildToVerticalBox(BarSize))
@@ -55,16 +63,19 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 
 	HealthText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("HoverHP"));
 	HealthText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
-	HealthText->SetFont(CaveboundUIStyle::Font(14));
+	HealthText->SetFont(CaveboundUIStyle::Font(13));
 	Body->AddChildToVerticalBox(HealthText);
 
-	PanelSlot = Canvas->AddChildToCanvas(Frame);
+	USizeBox* CardSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("HoverCardSize"));
+	CardSize->SetMinDesiredWidth(200.f);
+	CardSize->SetContent(Frame);
+
+	PanelSlot = Canvas->AddChildToCanvas(CardSize);
 	if (PanelSlot)
 	{
 		PanelSlot->SetAnchors(FAnchors(0.f, 0.f));
 		PanelSlot->SetAlignment(FVector2D(0.f, 1.f));
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetSize(FVector2D(180.f, 70.f));
 	}
 }
 
@@ -90,7 +101,6 @@ void UCaveboundHoverInfo::ShowAt(const FVector2D& ScreenPosition, const FText& N
 	}
 	if (PanelSlot)
 	{
-		// Sit just above the cursor.
 		PanelSlot->SetPosition(ScreenPosition + FVector2D(18.f, -12.f));
 	}
 

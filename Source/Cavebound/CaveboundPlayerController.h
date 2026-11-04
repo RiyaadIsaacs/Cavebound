@@ -14,6 +14,7 @@ class UCaveboundBuildMenu;
 class UCaveboundBuildPrompt;
 class UCaveboundDefenderMenu;
 class UCaveboundHoverInfo;
+class UCaveboundDamageVignette;
 class UCaveboundResourceReadout;
 class UMaterialInterface;
 class ACaveboundTurret;
@@ -77,6 +78,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	void RequestStartRound();
 
+	/** Soft radial red vignette when the tree is hit. */
+	void PulseDamageVignette();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -96,6 +100,7 @@ protected:
 	void SetGameSpeed(float Speed);
 	void RefreshSpeedButtonStyles();
 	void UpdateHoverInfoWidget();
+	void EnsureDamageVignette();
 	AActor* TraceActorUnderCursor() const;
 	UFUNCTION()
 	void HandleSkipCountdownClicked();
@@ -115,6 +120,8 @@ protected:
 	void UpdateHoveredHealthTarget();
 	bool IsPointerOverInteractiveUI() const;
 	bool IsMouseButtonHeld(const FKey& Button) const;
+	/** True only if the cursor is over the actor's on-screen silhouette (not a huge collision volume). */
+	bool IsCursorOverActorVisual(const AActor* Actor) const;
 
 	void HandleBuildKey();
 	void HandleDefenderKey();
@@ -194,6 +201,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundHoverInfo> HoverInfo;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundDamageVignette> DamageVignette;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> SlotHighlightMaterial;

@@ -59,6 +59,7 @@ protected:
 	void NotifyDestroyedByDamage();
 	void PlayDamageFlash();
 	void TryFireAtNearestEnemy();
+	float GetCanopyHeight() const;
 
 	ACaveboundBaseEnemy* FindNearestEnemy() const;
 

@@ -53,6 +53,13 @@ void ACaveboundGameMode::StartPlay()
 	bGameOver = false;
 	bEndRoundPending = false;
 
+	// Pawn may finish spawning a frame after StartPlay.
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(this, &ACaveboundGameMode::EnsurePlayerSpawnClearOfTree);
+	}
+	EnsurePlayerSpawnClearOfTree();
+
 	UE_LOG(
 		LogTemp,
 		Log,
@@ -68,6 +75,42 @@ void ACaveboundGameMode::EnsureGameplayReady()
 	EnsureEnemySpawnConfig();
 	CollectPathSplines();
 	EnsureRockField();
+}
+
+void ACaveboundGameMode::EnsurePlayerSpawnClearOfTree()
+{
+	ACaveboundTree* CurrentTree = GetTree();
+	APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
+	if (!CurrentTree || !Pawn)
+	{
+		return;
+	}
+
+	const FVector TreeLoc = CurrentTree->GetActorLocation();
+	const FVector PawnLoc = Pawn->GetActorLocation();
+	constexpr float MinClearance = 420.f;
+	if (FVector::Dist2D(TreeLoc, PawnLoc) >= MinClearance)
+	{
+		return;
+	}
+
+	FVector Candidate = TreeLoc + FVector(MinClearance, 0.f, 0.f);
+	Candidate.Z = PawnLoc.Z;
+
+	if (UWorld* World = GetWorld())
+	{
+		FHitResult Hit;
+		if (World->LineTraceSingleByChannel(
+				Hit,
+				Candidate + FVector(0.f, 0.f, 200.f),
+				Candidate - FVector(0.f, 0.f, 400.f),
+				ECC_WorldStatic))
+		{
+			Candidate.Z = Hit.ImpactPoint.Z + 92.f;
+		}
+	}
+
+	Pawn->SetActorLocation(Candidate, false, nullptr, ETeleportType::TeleportPhysics);
 }
 
 void ACaveboundGameMode::EnsureRockField()
@@ -204,18 +247,48 @@ void ACaveboundGameMode::EnsureTree()
 		return;
 	}
 
-	// Remove any placeholder actors with the tag PlaygroundTree
+	auto DestroyActorList = [](TArray<AActor*>& Actors)
+	{
+		for (AActor* Actor : Actors)
+		{
+			if (IsValid(Actor))
+			{
+				Actor->Destroy();
+			}
+		}
+	};
+
+	// Remove old playground placeholders.
 	TArray<AActor*> StandIns;
 	UGameplayStatics::GetAllActorsWithTag(World, FName(TEXT("PlaygroundTree")), StandIns);
-	for (AActor* StandIn : StandIns)
+	DestroyActorList(StandIns);
+
+	// Remove the level-placed BP_MainTower stand-in (shows up as BP_MainTower0, etc.).
+	if (UClass* MainTowerClass = LoadClass<AActor>(
+			nullptr, TEXT("/Game/Blueprints/BP_MainTower.BP_MainTower_C")))
 	{
-		if (StandIn)
+		TArray<AActor*> MainTowers;
+		UGameplayStatics::GetAllActorsOfClass(World, MainTowerClass, MainTowers);
+		DestroyActorList(MainTowers);
+	}
+	else
+	{
+		for (TActorIterator<AActor> It(World); It; ++It)
 		{
-			StandIn->Destroy();
+			AActor* Actor = *It;
+			if (!Actor)
+			{
+				continue;
+			}
+			const FString Name = Actor->GetName();
+			if (Name.StartsWith(TEXT("BP_MainTower")))
+			{
+				Actor->Destroy();
+			}
 		}
 	}
 
-	// If the level already has a tree, use it. Otherwise spawn one
+	// If the level already has a Cavebound tree, use it. Otherwise spawn one.
 	TArray<AActor*> ExistingTrees;
 	UGameplayStatics::GetAllActorsOfClass(World, ACaveboundTree::StaticClass(), ExistingTrees);
 	if (ExistingTrees.Num() > 0)
@@ -224,12 +297,11 @@ void ACaveboundGameMode::EnsureTree()
 		return;
 	}
 
-	// Spawn a new tree at a fixed location
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	Tree = World->SpawnActor<ACaveboundTree>(
 		ACaveboundTree::StaticClass(),
-		FVector(0, 0.f, 0.f),
+		FVector(0.f, 0.f, 0.f),
 		FRotator::ZeroRotator,
 		SpawnParams);
 }
