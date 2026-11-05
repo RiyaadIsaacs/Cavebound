@@ -613,6 +613,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 	{
 		DamageVignette->TickFade(DeltaTime);
 	}
+	SyncTreeScreenDarken();
 
 	if (bPauseMenuOpen)
 	{
@@ -1223,6 +1224,15 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 
 		if (IsBuildSlotActor(HitActor) && IsCursorOverActorVisual(HitActor))
 		{
+			// Occupied pads don't take hover — prefer the defender on them.
+			if (ACaveboundTurret* Defender = GetDefenderOnSlot(HitActor))
+			{
+				if (!Defender->IsDestroyed())
+				{
+					HoveredHealthActor = Defender;
+					return;
+				}
+			}
 			HoveredBuildSlot = HitActor;
 			return;
 		}
@@ -1244,6 +1254,14 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 			float BestDistSq = TNumericLimits<float>::Max();
 			for (AActor* Slot : NearbySlots)
 			{
+				// CollectInteractableSlots already skips occupied, but guard anyway.
+				if (ACaveboundTurret* Defender = GetDefenderOnSlot(Slot))
+				{
+					if (!Defender->IsDestroyed())
+					{
+						continue;
+					}
+				}
 				if (!IsCursorOverActorVisual(Slot))
 				{
 					continue;
@@ -1283,8 +1301,45 @@ void ACaveboundPlayerController::PulseDamageVignette()
 	EnsureDamageVignette();
 	if (DamageVignette)
 	{
-		DamageVignette->Pulse(0.8f, 0.6f);
+		DamageVignette->PulseDamage(0.8f, 0.6f);
 	}
+}
+
+void ACaveboundPlayerController::PulseWoodVignette()
+{
+	EnsureDamageVignette();
+	if (DamageVignette)
+	{
+		DamageVignette->PulseWood(0.55f, 0.35f);
+	}
+}
+
+void ACaveboundPlayerController::PulseRockVignette()
+{
+	EnsureDamageVignette();
+	if (DamageVignette)
+	{
+		DamageVignette->PulseRock(0.55f, 0.35f);
+	}
+}
+
+void ACaveboundPlayerController::SyncTreeScreenDarken()
+{
+	EnsureDamageVignette();
+	if (!DamageVignette)
+	{
+		return;
+	}
+
+	float HealthFrac = 1.f;
+	if (UWorld* World = GetWorld())
+	{
+		if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
+		{
+			HealthFrac = GameMode->GetTreeHealthPercent();
+		}
+	}
+	DamageVignette->SetTreeHealthFraction(HealthFrac);
 }
 
 void ACaveboundPlayerController::UpdateHoverInfoWidget()

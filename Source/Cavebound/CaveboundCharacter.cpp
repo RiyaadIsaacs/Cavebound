@@ -1,8 +1,10 @@
 #include "CaveboundCharacter.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundMoveMarker.h"
+#include "CaveboundPlayerController.h"
 #include "CaveboundRockDeposit.h"
 #include "CaveboundTree.h"
+#include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimSingleNodeInstance.h"
@@ -314,6 +316,11 @@ void ACaveboundCharacter::TryMine(float DeltaTime)
 			if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
 			{
 				GameMode->AddWood(GameMode->GetWoodPerHarvest());
+			}
+			if (ACaveboundPlayerController* PC = Cast<ACaveboundPlayerController>(
+					UGameplayStatics::GetPlayerController(World, 0)))
+			{
+				PC->PulseWoodVignette();
 			}
 		}
 	}

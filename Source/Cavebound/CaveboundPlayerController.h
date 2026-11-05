@@ -79,8 +79,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	void RequestStartRound();
 
-	/** Soft radial red vignette when the tree is hit. */
+	/** Screen-space vignettes: damage (red) outranks wood/rock while active. */
 	void PulseDamageVignette();
+	void PulseWoodVignette();
+	void PulseRockVignette();
+	void SyncTreeScreenDarken();
 
 protected:
 	virtual void BeginPlay() override;

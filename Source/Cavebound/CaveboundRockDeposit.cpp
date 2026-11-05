@@ -2,7 +2,9 @@
 
 #include "CaveboundGameMode.h"
 #include "CaveboundHarvestBar.h"
+#include "CaveboundPlayerController.h"
 #include "CaveboundSoftVFX.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
@@ -132,6 +134,12 @@ bool ACaveboundRockDeposit::AddHarvestTime(float DeltaTime)
 		if (ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>())
 		{
 			GameMode->GiveRock(RocksHarvested);
+		}
+
+		if (ACaveboundPlayerController* PC = Cast<ACaveboundPlayerController>(
+				UGameplayStatics::GetPlayerController(World, 0)))
+		{
+			PC->PulseRockVignette();
 		}
 
 		// Same hit sparks as enemies, but grey and much bigger.

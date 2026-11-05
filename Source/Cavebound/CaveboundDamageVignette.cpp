@@ -9,6 +9,7 @@
 #include "Materials/MaterialExpressionScalarParameter.h"
 #include "Materials/MaterialExpressionSceneTexture.h"
 #include "Materials/MaterialExpressionScreenPosition.h"
+#include "Materials/MaterialExpressionVectorParameter.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/Package.h"
@@ -21,11 +22,14 @@
 
 namespace
 {
-	// V2: no GetViewportUV() — that fails to compile in custom PP material nodes.
-	constexpr const TCHAR* VignettePackage = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundDamageVignetteV2");
-	constexpr const TCHAR* VignettePath = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundDamageVignetteV2.PP_CaveboundDamageVignetteV2");
+	constexpr const TCHAR* VignettePackage = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundScreenFXV3");
+	constexpr const TCHAR* VignettePath = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundScreenFXV3.PP_CaveboundScreenFXV3");
 	constexpr const TCHAR* VolumeTag = TEXT("CaveboundDamageVignette");
 	constexpr const TCHAR* StrengthParamName = TEXT("Strength");
+	constexpr const TCHAR* DarkenParamName = TEXT("Darken");
+	constexpr const TCHAR* TintParamName = TEXT("Tint");
+
+	constexpr float MaxTreeDarken = 0.5f;
 
 #if WITH_EDITORONLY_DATA
 	UMaterial* BuildVignetteMaterial(UObject* Outer, FName AssetName)
@@ -54,12 +58,23 @@ namespace
 		StrengthParam->DefaultValue = 0.f;
 		EditorData->ExpressionCollection.AddExpression(StrengthParam);
 
+		UMaterialExpressionScalarParameter* DarkenParam = NewObject<UMaterialExpressionScalarParameter>(Material);
+		DarkenParam->ParameterName = DarkenParamName;
+		DarkenParam->DefaultValue = 0.f;
+		EditorData->ExpressionCollection.AddExpression(DarkenParam);
+
+		UMaterialExpressionVectorParameter* TintParam = NewObject<UMaterialExpressionVectorParameter>(Material);
+		TintParam->ParameterName = TintParamName;
+		TintParam->DefaultValue = FLinearColor(0.75f, 0.05f, 0.05f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(TintParam);
+
 		UMaterialExpressionCustom* Custom = NewObject<UMaterialExpressionCustom>(Material);
-		Custom->Description = TEXT("CaveboundDamageVignetteV2");
+		Custom->Description = TEXT("CaveboundScreenFXV3");
 		Custom->OutputType = CMOT_Float3;
-		// Scene color from SceneTexture node; radial mask from ScreenPosition ViewportUV.
 		Custom->Code = TEXT(
 			"float3 SceneColor = SceneColorRef.rgb;\n"
+			"float Dark = saturate(Darken);\n"
+			"SceneColor *= (1.0 - Dark);\n"
 			"float Amt = saturate(Strength);\n"
 			"if (Amt <= 0.001)\n"
 			"{\n"
@@ -70,7 +85,8 @@ namespace
 			"float Dist = length(C);\n"
 			"float V = saturate(smoothstep(0.30, 1.15, Dist));\n"
 			"V = pow(V, 1.4);\n"
-			"float3 Edge = SceneColor * float3(0.25, 0.02, 0.02) + float3(0.55, 0.02, 0.02);\n"
+			"float3 EdgeCol = saturate(Tint.rgb);\n"
+			"float3 Edge = SceneColor * (EdgeCol * 0.35) + EdgeCol * 0.75;\n"
 			"return lerp(SceneColor, Edge, saturate(V * Amt));\n");
 		EditorData->ExpressionCollection.AddExpression(Custom);
 
@@ -88,6 +104,16 @@ namespace
 			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
 			In.InputName = TEXT("Strength");
 			StrengthParam->ConnectExpression(&In.Input, 0);
+		}
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("Darken");
+			DarkenParam->ConnectExpression(&In.Input, 0);
+		}
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("Tint");
+			TintParam->ConnectExpression(&In.Input, 0);
 		}
 
 		Custom->ConnectExpression(&EditorData->EmissiveColor, 0);
@@ -139,12 +165,12 @@ UMaterialInterface* UCaveboundDamageVignette::GetOrBuildMaterial()
 #if WITH_EDITOR
 	UPackage* Package = CreatePackage(VignettePackage);
 	Package->FullyLoad();
-	UMaterial* AssetMaterial = BuildVignetteMaterial(Package, TEXT("PP_CaveboundDamageVignetteV2"));
+	UMaterial* AssetMaterial = BuildVignetteMaterial(Package, TEXT("PP_CaveboundScreenFXV3"));
 	TrySaveMaterialAsset(AssetMaterial, VignettePackage);
 	TransientCache = AssetMaterial;
 	return AssetMaterial;
 #else
-	UMaterial* RuntimeMaterial = BuildVignetteMaterial(GetTransientPackage(), TEXT("PP_CaveboundDamageVignetteV2"));
+	UMaterial* RuntimeMaterial = BuildVignetteMaterial(GetTransientPackage(), TEXT("PP_CaveboundScreenFXV3"));
 	TransientCache = RuntimeMaterial;
 	return RuntimeMaterial;
 #endif
@@ -214,30 +240,86 @@ void UCaveboundDamageVignette::Ensure(UWorld* World)
 			VignetteMID = UMaterialInstanceDynamic::Create(Base, this);
 			if (VignetteMID)
 			{
-				VignetteMID->SetScalarParameterValue(StrengthParamName, 0.f);
+				ApplyVignetteParams(0.f);
+				ApplyDarken();
 			}
 		}
 	}
 
 	BindToWorld(World);
-	SetStrength(bActive ? PeakStrength * (Life / FMath::Max(Duration, 0.05f)) : 0.f);
+	if (bActive)
+	{
+		const float T = Life / FMath::Max(Duration, 0.05f);
+		ApplyVignetteParams(PeakStrength * FMath::Clamp(T, 0.f, 1.f));
+	}
+	else
+	{
+		ApplyVignetteParams(0.f);
+	}
+	ApplyDarken();
 }
 
-void UCaveboundDamageVignette::SetStrength(float Alpha)
+void UCaveboundDamageVignette::ApplyVignetteParams(float Strength)
+{
+	if (!VignetteMID)
+	{
+		return;
+	}
+	VignetteMID->SetScalarParameterValue(StrengthParamName, FMath::Clamp(Strength, 0.f, 1.f));
+	VignetteMID->SetVectorParameterValue(TintParamName, ActiveTint);
+}
+
+void UCaveboundDamageVignette::ApplyDarken()
 {
 	if (VignetteMID)
 	{
-		VignetteMID->SetScalarParameterValue(StrengthParamName, FMath::Clamp(Alpha, 0.f, 1.f));
+		VignetteMID->SetScalarParameterValue(DarkenParamName, FMath::Clamp(DarkenAmount, 0.f, MaxTreeDarken));
 	}
 }
 
-void UCaveboundDamageVignette::Pulse(float Strength, float InDuration)
+void UCaveboundDamageVignette::Pulse(
+	ECaveboundVignetteKind Kind,
+	const FLinearColor& Tint,
+	float Strength,
+	float InDuration)
 {
+	// Red damage outranks collect pulses while it is still fading.
+	if (bActive
+		&& ActiveKind == ECaveboundVignetteKind::Damage
+		&& Kind != ECaveboundVignetteKind::Damage)
+	{
+		return;
+	}
+
+	ActiveKind = Kind;
+	ActiveTint = Tint;
 	PeakStrength = FMath::Clamp(Strength, 0.f, 1.f);
 	Duration = FMath::Max(0.05f, InDuration);
 	Life = Duration;
 	bActive = true;
-	SetStrength(PeakStrength);
+	ApplyVignetteParams(PeakStrength);
+}
+
+void UCaveboundDamageVignette::PulseDamage(float Strength, float InDuration)
+{
+	Pulse(ECaveboundVignetteKind::Damage, FLinearColor(0.85f, 0.05f, 0.05f, 1.f), Strength, InDuration);
+}
+
+void UCaveboundDamageVignette::PulseWood(float Strength, float InDuration)
+{
+	Pulse(ECaveboundVignetteKind::Wood, FLinearColor(0.12f, 0.85f, 0.22f, 1.f), Strength, InDuration);
+}
+
+void UCaveboundDamageVignette::PulseRock(float Strength, float InDuration)
+{
+	Pulse(ECaveboundVignetteKind::Rock, FLinearColor(0.62f, 0.62f, 0.66f, 1.f), Strength, InDuration);
+}
+
+void UCaveboundDamageVignette::SetTreeHealthFraction(float HealthFrac)
+{
+	const float Clamped = FMath::Clamp(HealthFrac, 0.f, 1.f);
+	DarkenAmount = (1.f - Clamped) * MaxTreeDarken;
+	ApplyDarken();
 }
 
 void UCaveboundDamageVignette::TickFade(float DeltaTime)
@@ -251,10 +333,11 @@ void UCaveboundDamageVignette::TickFade(float DeltaTime)
 	if (Life <= 0.f)
 	{
 		bActive = false;
-		SetStrength(0.f);
+		ActiveKind = ECaveboundVignetteKind::None;
+		ApplyVignetteParams(0.f);
 		return;
 	}
 
 	const float T = Life / Duration;
-	SetStrength(PeakStrength * FMath::InterpEaseIn(0.f, 1.f, T, 2.f));
+	ApplyVignetteParams(PeakStrength * FMath::InterpEaseIn(0.f, 1.f, T, 2.f));
 }
