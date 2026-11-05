@@ -31,6 +31,7 @@ protected:
 	virtual void OnDeath() override;
 	virtual bool CanAttack() const override;
 	virtual void OnMeleeStrike() override;
+	virtual void GatherHoverGlowMeshes(TArray<UMeshComponent*>& OutMeshes) const override;
 
 	void EnsureAnimationAssets();
 	void UpdatePresentation(float DeltaTime, const FVector& LocationBeforeTick);

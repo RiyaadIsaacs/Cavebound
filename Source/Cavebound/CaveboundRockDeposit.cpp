@@ -2,6 +2,10 @@
 
 #include "CaveboundGameMode.h"
 #include "CaveboundHarvestBar.h"
+#include "CaveboundModelOutline.h"
+#include "CaveboundPlayerController.h"
+#include "CaveboundSoftVFX.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
@@ -27,6 +31,8 @@ ACaveboundRockDeposit::ACaveboundRockDeposit()
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	VisualMesh->SetCollisionResponseToAllChannels(ECR_Block);
+	// Nanite meshes ignore overlay materials, so hover glow would never show.
+	VisualMesh->bDisallowNanite = true;
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> stoneMesh(
 		TEXT("/Game/Assets/Models/Stones/Stone.Stone"));
@@ -67,6 +73,7 @@ void ACaveboundRockDeposit::BeginPlay()
 	}
 
 	RollYield();
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 void ACaveboundRockDeposit::RollYield()
@@ -130,6 +137,20 @@ bool ACaveboundRockDeposit::AddHarvestTime(float DeltaTime)
 		{
 			GameMode->GiveRock(RocksHarvested);
 		}
+
+		if (ACaveboundPlayerController* PC = Cast<ACaveboundPlayerController>(
+				UGameplayStatics::GetPlayerController(World, 0)))
+		{
+			PC->PulseRockVignette();
+		}
+
+		// Same hit sparks as enemies, but grey and much bigger.
+		ACaveboundSparkBurst::SpawnAt(
+			World,
+			GetActorLocation() + FVector(0.f, 0.f, 50.f),
+			FLinearColor(0.65f, 0.65f, 0.68f, 1.f),
+			42,
+			2.8f);
 	}
 
 	if (RockRemaining > 0)

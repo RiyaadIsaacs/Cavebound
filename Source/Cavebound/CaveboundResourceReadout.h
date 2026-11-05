@@ -7,9 +7,7 @@
 class UTextBlock;
 class UCanvasPanelSlot;
 
-/**
- * Small "Rock: N" line under the wood counter.
- */
+/** Top-left Wood / Rock readout. */
 UCLASS()
 class CAVEBOUND_API UCaveboundResourceReadout : public UUserWidget
 {
@@ -20,6 +18,9 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> WoodText;
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> RockText;

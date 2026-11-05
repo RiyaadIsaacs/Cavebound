@@ -13,9 +13,13 @@ class UCanvasPanel;
 class UCaveboundBuildMenu;
 class UCaveboundBuildPrompt;
 class UCaveboundDefenderMenu;
+class UCaveboundHoverInfo;
+class UCaveboundDamageVignette;
 class UCaveboundResourceReadout;
 class UMaterialInterface;
+class UMaterialInstanceDynamic;
 class ACaveboundTurret;
+class UHorizontalBox;
 
 /**
  * Reads the mouse and tells the Character where to walk.
@@ -75,6 +79,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Cavebound")
 	void RequestStartRound();
 
+	/** Screen-space vignettes: damage (red) outranks wood/rock while active. */
+	void PulseDamageVignette();
+	void PulseWoodVignette();
+	void PulseRockVignette();
+	void SyncTreeScreenDarken();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -90,8 +100,20 @@ protected:
 	void ShowHUD();
 	void CreateSkipCountdownButton();
 	void UpdateSkipCountdownButton();
+	void CreateSpeedButtons();
+	void SetGameSpeed(float Speed);
+	void RefreshSpeedButtonStyles();
+	void UpdateHoverInfoWidget();
+	void EnsureDamageVignette();
+	AActor* TraceActorUnderCursor() const;
 	UFUNCTION()
 	void HandleSkipCountdownClicked();
+	UFUNCTION()
+	void HandleSpeed1Clicked();
+	UFUNCTION()
+	void HandleSpeed2Clicked();
+	UFUNCTION()
+	void HandleSpeed3Clicked();
 	void ShowPauseMenu();
 	void HidePauseMenu();
 	void ApplyGameplayInputMode();
@@ -100,8 +122,15 @@ protected:
 	void ConfigureHudClickThrough();
 	void ClearEnhancedClickMappings();
 	void UpdateHoveredHealthTarget();
+	void UpdateHoverGlow();
+	void ClearHoverGlow();
+	void ApplyHoverGlow(AActor* Actor, const FLinearColor& Color);
+	FLinearColor GetHoverGlowColor(const AActor* Actor) const;
+	bool IsBuildSlotActor(const AActor* Actor) const;
 	bool IsPointerOverInteractiveUI() const;
 	bool IsMouseButtonHeld(const FKey& Button) const;
+	/** True only if the cursor is over the actor's on-screen silhouette (not a huge collision volume). */
+	bool IsCursorOverActorVisual(const AActor* Actor) const;
 
 	void HandleBuildKey();
 	void HandleDefenderKey();
@@ -116,6 +145,8 @@ protected:
 	bool GetSlotScreenPosition(const AActor* Slot, float Height, FVector2D& OutScreenPosition) const;
 	AActor* FindBuildSlotForMenu() const;
 	void ClearSlotOccupied(AActor* Slot);
+	// Spawns and registers the defender immediately so the beam can fade it in.
+	AActor* SpawnPlacedDefender(AActor* Slot, TSubclassOf<AActor> DefenderClass, const FTransform& SlotTransform);
 
 	UFUNCTION()
 	void HandlePlacedDefenderDestroyed(AActor* DestroyedActor);
@@ -139,6 +170,20 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UCanvasPanelSlot> SkipCountdownButtonSlot;
 
+	UPROPERTY()
+	TObjectPtr<UButton> SpeedButton1;
+
+	UPROPERTY()
+	TObjectPtr<UButton> SpeedButton2;
+
+	UPROPERTY()
+	TObjectPtr<UButton> SpeedButton3;
+
+	UPROPERTY()
+	TObjectPtr<UCanvasPanelSlot> SpeedButtonsSlot;
+
+	float GameSpeed = 1.f;
+
 	// Separate from WBP_PlayerHUD so pause can block input without breaking click-to-move
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> PauseMenuWidgetClass;
@@ -150,6 +195,15 @@ protected:
 	void OnClickMove();
 
 	TWeakObjectPtr<AActor> HoveredHealthActor;
+	TWeakObjectPtr<AActor> HoveredBuildSlot;
+	TWeakObjectPtr<AActor> HoverGlowActor;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> HoverGlowMaterial;
+
+	/** Flat tint overlay — used for skeletal enemies / Nanite-prone rocks where rim outline fails. */
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> HoverGlowFillMaterial;
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundBuildMenu> BuildMenu;
@@ -162,6 +216,12 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundResourceReadout> RockReadout;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundHoverInfo> HoverInfo;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundDamageVignette> DamageVignette;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> SlotHighlightMaterial;

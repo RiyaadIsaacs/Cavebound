@@ -1,4 +1,6 @@
 #include "CaveboundBaseEnemy.h"
+#include "CaveboundModelOutline.h"
+#include "CaveboundSoftVFX.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundSnare.h"
 #include "CaveboundTree.h"
@@ -27,6 +29,12 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 	VisualMesh->SetGenerateOverlapEvents(true);
 
 	Health = MaxHealth;
+}
+
+void ACaveboundBaseEnemy::BeginPlay()
+{
+	Super::BeginPlay();
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 // Initialize the enemy to walk along a spline 
@@ -94,6 +102,11 @@ void ACaveboundBaseEnemy::ApplyDamage(float Amount)
 
 	Health = FMath::Max(0.f, Health - Amount);
 	PlayDamageFlash();
+	// Yellow hit sparks.
+	ACaveboundSparkBurst::SpawnAt(
+		GetWorld(),
+		GetActorLocation() + FVector(0.f, 0.f, 60.f),
+		FLinearColor(1.f, 0.85f, 0.12f, 1.f));
 
 	if (IsDead())
 	{
@@ -178,6 +191,14 @@ void ACaveboundBaseEnemy::ReleaseSnare(AActor* Source)
 bool ACaveboundBaseEnemy::IsSnaredBy(const AActor* Source) const
 {
 	return bIsSnared && SnareSource.Get() == Source;
+}
+
+void ACaveboundBaseEnemy::GatherHoverGlowMeshes(TArray<UMeshComponent*>& OutMeshes) const
+{
+	if (VisualMesh && VisualMesh->GetStaticMesh())
+	{
+		OutMeshes.Add(VisualMesh);
+	}
 }
 
 void ACaveboundBaseEnemy::PlayDamageFlash()

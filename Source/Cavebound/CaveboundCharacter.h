@@ -13,6 +13,7 @@ class UAnimSequence;
 class UBlendSpace;
 class ACaveboundTree;
 class ACaveboundRockDeposit;
+class ACaveboundMoveMarker;
 
 /**
   The player's body in the world
@@ -30,6 +31,9 @@ public:
 
 	// Called by the PlayerController when the player clicks the ground.
 	void SetMoveDestination(const FVector& Destination);
+
+	void ShowMoveMarker(const FVector& WorldLocation);
+	void HideMoveMarker();
 
 	// Clicked the tree: walk to it, then mine wood while standing in range. 
 	void SetTreeTarget(ACaveboundTree* Tree);
@@ -101,6 +105,9 @@ protected:
 
 	FVector MoveDestination = FVector::ZeroVector;
 	bool bHasMoveDestination = false;
+
+	UPROPERTY()
+	TObjectPtr<ACaveboundMoveMarker> MoveMarker;
 
 	// Main tower to mine wood from. Null if we are not mining
 	TWeakObjectPtr<ACaveboundTree> TargetTree;

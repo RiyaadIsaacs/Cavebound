@@ -2,6 +2,7 @@
 #include "CaveboundDamageFlash.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundMinionAnimInstance.h"
+#include "CaveboundModelOutline.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
@@ -43,8 +44,9 @@ ACaveboundEnemy::ACaveboundEnemy()
 	HitVolume->SetupAttachment(VisualMesh);
 	HitVolume->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
 	HitVolume->SetRelativeScale3D(FVector(1.2f, 1.2f, 2.0f));
+	// Invisible for rendering, but keep HiddenInGame false so hover/visibility traces still hit.
 	HitVolume->SetVisibility(false);
-	HitVolume->SetHiddenInGame(true);
+	HitVolume->SetHiddenInGame(false);
 	HitVolume->SetCastShadow(false);
 	HitVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	HitVolume->SetCollisionObjectType(ECC_WorldDynamic);
@@ -168,6 +170,8 @@ void ACaveboundEnemy::EnsureAnimationAssets()
 
 	if (HitVolume)
 	{
+		HitVolume->SetVisibility(false);
+		HitVolume->SetHiddenInGame(false);
 		HitVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 		HitVolume->SetCollisionObjectType(ECC_WorldDynamic);
 		HitVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
@@ -229,6 +233,7 @@ void ACaveboundEnemy::BeginPlay()
 {
 	Super::BeginPlay();
 	EnsureAnimationAssets();
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 void ACaveboundEnemy::Tick(float DeltaTime)
@@ -353,6 +358,15 @@ void ACaveboundEnemy::HandleHitMontageEnded(UAnimMontage* Montage, bool bInterru
 UCaveboundMinionAnimInstance* ACaveboundEnemy::GetMinionAnim() const
 {
 	return Body ? Cast<UCaveboundMinionAnimInstance>(Body->GetAnimInstance()) : nullptr;
+}
+
+void ACaveboundEnemy::GatherHoverGlowMeshes(TArray<UMeshComponent*>& OutMeshes) const
+{
+	if (Body && Body->GetSkeletalMeshAsset())
+	{
+		OutMeshes.Add(Body);
+	}
+	Super::GatherHoverGlowMeshes(OutMeshes);
 }
 
 void ACaveboundEnemy::UpdatePresentation(float DeltaTime, const FVector& LocationBeforeTick)

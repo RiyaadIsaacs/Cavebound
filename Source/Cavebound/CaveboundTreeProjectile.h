@@ -5,11 +5,10 @@
 #include "CaveboundTreeProjectile.generated.h"
 
 class UStaticMeshComponent;
+class UMaterialInstanceDynamic;
 class ACaveboundBaseEnemy;
 
-/**
- * Small cube fired by the centre tree at the nearest enemy.
- */
+/** Green orb fired by the centre tree at the nearest enemy. */
 UCLASS()
 class CAVEBOUND_API ACaveboundTreeProjectile : public AActor
 {
@@ -26,20 +25,26 @@ protected:
 	virtual void BeginPlay() override;
 
 	UFUNCTION()
-	void OnMeshBeginOverlap(UPrimitiveComponent* OverlappedComponent,AActor* OtherActor,UPrimitiveComponent* OtherComp,
+	void OnOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
 		int32 OtherBodyIndex,
 		bool bFromSweep,
 		const FHitResult& SweepResult);
 
-	void TryHitEnemy(AActor* OtherActor);
+	void HitEnemy(AActor* OtherActor);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mesh")
-	TObjectPtr<UStaticMeshComponent> VisualMesh;
+	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> Mat;
 
 	TWeakObjectPtr<ACaveboundBaseEnemy> Target;
 
 	float Damage = 10.f;
 	float Speed = 900.f;
-	float Lifetime = 0.f;
-	float MaxLifetime = 3.f;
+	float Time = 0.f;
+	float MaxLife = 3.f;
 };
