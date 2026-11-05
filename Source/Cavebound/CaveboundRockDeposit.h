@@ -8,6 +8,7 @@
 class USceneComponent;
 class UStaticMeshComponent;
 class UWidgetComponent;
+class UMaterialInstanceDynamic;
 class UCaveboundHarvestBar;
 
 /**
@@ -43,6 +44,8 @@ protected:
 	void WakeUp();
 	void UpdateBar();
 	void HideBar();
+	void EnsureMineVisualMaterial();
+	void UpdateMineVisuals();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Rock")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -55,6 +58,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundHarvestBar> HarvestWidget;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> MineVisualMaterial;
 
 	UPROPERTY(EditAnywhere, Category = "Rock")
 	float MineRange = 220.f;

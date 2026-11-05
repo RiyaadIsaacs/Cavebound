@@ -43,7 +43,11 @@ namespace CaveboundShaderMaterials
 	// V3: Intensity drives emissive only; OpacityBoost drives rim strength (V2 was too faint).
 	static constexpr const TCHAR* HoverOutlinePackage = TEXT("/Game/Assets/Materials/M_HoverOutlineV3");
 	static constexpr const TCHAR* HoverOutlinePath = TEXT("/Game/Assets/Materials/M_HoverOutlineV3.M_HoverOutlineV3");
+	// V2: sink + colour only (V1 cached a time-based crumble that kept oscillating at rest).
+	static constexpr const TCHAR* RockMinePackage = TEXT("/Game/Assets/Materials/M_RockMineDisplaceV2");
+	static constexpr const TCHAR* RockMinePath = TEXT("/Game/Assets/Materials/M_RockMineDisplaceV2.M_RockMineDisplaceV2");
 	static constexpr const TCHAR* TowerTexturePath = TEXT("/Game/Assets/Models/Towers/T_FortressElves.T_FortressElves");
+	static constexpr const TCHAR* RockTexturePath = TEXT("/Game/Assets/Models/Stones/Texture__1_.Texture__1_");
 
 #if WITH_EDITORONLY_DATA
 	static void FinalizeMaterial(UMaterial* Material)
@@ -471,6 +475,84 @@ namespace CaveboundShaderMaterials
 		return Material;
 	}
 
+	static UMaterial* BuildRockMineDisplaceMaterial(UObject* Outer, FName AssetName)
+	{
+		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
+		Material->MaterialDomain = MD_Surface;
+		Material->BlendMode = BLEND_Opaque;
+		Material->SetShadingModel(MSM_DefaultLit);
+		Material->TwoSided = false;
+		Material->bAutomaticallySetUsageInEditor = true;
+
+		UMaterialEditorOnlyData* EditorData = Material->GetEditorOnlyData();
+		if (!EditorData)
+		{
+			return Material;
+		}
+
+		// 0 = untouched pile, 1 = fully mined. No time-based motion — rocks stay still.
+		UMaterialExpressionScalarParameter* MineAmount = NewObject<UMaterialExpressionScalarParameter>(Material);
+		MineAmount->ParameterName = TEXT("MineAmount");
+		MineAmount->DefaultValue = 0.f;
+		EditorData->ExpressionCollection.AddExpression(MineAmount);
+
+		UMaterialExpressionScalarParameter* MaxSink = NewObject<UMaterialExpressionScalarParameter>(Material);
+		MaxSink->ParameterName = TEXT("MaxSink");
+		MaxSink->DefaultValue = 28.f;
+		EditorData->ExpressionCollection.AddExpression(MaxSink);
+
+		UMaterialExpressionConstant3Vector* Down = NewObject<UMaterialExpressionConstant3Vector>(Material);
+		Down->Constant = FLinearColor(0.f, 0.f, -1.f, 0.f);
+		EditorData->ExpressionCollection.AddExpression(Down);
+
+		UMaterialExpressionMultiply* SinkAmount = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(SinkAmount);
+		SinkAmount->A.Connect(0, MineAmount);
+		SinkAmount->B.Connect(0, MaxSink);
+
+		UMaterialExpressionMultiply* Sink = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(Sink);
+		Sink->A.Connect(0, Down);
+		Sink->B.Connect(0, SinkAmount);
+		Sink->ConnectExpression(&EditorData->WorldPositionOffset, 0);
+
+		UMaterialExpressionVectorParameter* HealthyColour = NewObject<UMaterialExpressionVectorParameter>(Material);
+		HealthyColour->ParameterName = TEXT("HealthyColour");
+		HealthyColour->DefaultValue = FLinearColor(0.55f, 0.52f, 0.48f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(HealthyColour);
+
+		UMaterialExpressionVectorParameter* WornColour = NewObject<UMaterialExpressionVectorParameter>(Material);
+		WornColour->ParameterName = TEXT("WornColour");
+		WornColour->DefaultValue = FLinearColor(0.28f, 0.24f, 0.2f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(WornColour);
+
+		if (UTexture2D* RockTex = LoadObject<UTexture2D>(nullptr, RockTexturePath))
+		{
+			UMaterialExpressionTextureSample* TexSample = NewObject<UMaterialExpressionTextureSample>(Material);
+			TexSample->Texture = RockTex;
+			EditorData->ExpressionCollection.AddExpression(TexSample);
+
+			UMaterialExpressionLinearInterpolate* TexTint = NewObject<UMaterialExpressionLinearInterpolate>(Material);
+			EditorData->ExpressionCollection.AddExpression(TexTint);
+			TexTint->A.Connect(0, TexSample);
+			TexTint->B.Connect(0, WornColour);
+			TexTint->Alpha.Connect(0, MineAmount);
+			TexTint->ConnectExpression(&EditorData->BaseColor, 0);
+		}
+		else
+		{
+			UMaterialExpressionLinearInterpolate* ColourLerp = NewObject<UMaterialExpressionLinearInterpolate>(Material);
+			EditorData->ExpressionCollection.AddExpression(ColourLerp);
+			ColourLerp->A.Connect(0, HealthyColour);
+			ColourLerp->B.Connect(0, WornColour);
+			ColourLerp->Alpha.Connect(0, MineAmount);
+			ColourLerp->ConnectExpression(&EditorData->BaseColor, 0);
+		}
+
+		FinalizeMaterial(Material);
+		return Material;
+	}
+
 	static UMaterial* BuildHoverOutlineMaterial(UObject* Outer, FName AssetName)
 	{
 		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
@@ -649,6 +731,19 @@ namespace CaveboundShaderMaterials
 #endif
 	}
 
+	UMaterialInterface* GetRockMineDisplaceMaterial()
+	{
+#if WITH_EDITORONLY_DATA
+		return EnsureContentMaterial(
+			RockMinePath,
+			RockMinePackage,
+			TEXT("M_RockMineDisplaceV2"),
+			[](UObject* Outer, FName Name) { return BuildRockMineDisplaceMaterial(Outer, Name); });
+#else
+		return LoadObject<UMaterialInterface>(nullptr, RockMinePath);
+#endif
+	}
+
 	UMaterialInstanceDynamic* CreatePoisonPulseMID(UObject* Outer)
 	{
 		UMaterialInterface* Parent = GetPoisonPulseMaterial();
@@ -692,6 +787,16 @@ namespace CaveboundShaderMaterials
 	UMaterialInstanceDynamic* CreateHoverOutlineMID(UObject* Outer)
 	{
 		UMaterialInterface* Parent = GetHoverOutlineMaterial();
+		if (!Parent || !Outer)
+		{
+			return nullptr;
+		}
+		return UMaterialInstanceDynamic::Create(Parent, Outer);
+	}
+
+	UMaterialInstanceDynamic* CreateRockMineDisplaceMID(UObject* Outer)
+	{
+		UMaterialInterface* Parent = GetRockMineDisplaceMaterial();
 		if (!Parent || !Outer)
 		{
 			return nullptr;

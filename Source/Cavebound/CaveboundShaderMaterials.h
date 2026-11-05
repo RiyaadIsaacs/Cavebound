@@ -12,6 +12,7 @@ class UObject;
  * M_TierAura: translucent unlit pulse for boss tier aura (AuraColorA/B)
  * M_EnragePulse: purple emissive pulse + light WPO for boss enrage
  * M_HoverOutline: translucent unlit fresnel rim for hover outlines
+ * M_RockMineDisplace: sink + crumble WPO scaled by MineAmount (0 full .. 1 empty)
  */
 namespace CaveboundShaderMaterials
 {
@@ -20,10 +21,12 @@ namespace CaveboundShaderMaterials
 	UMaterialInterface* GetTierAuraMaterial();
 	UMaterialInterface* GetEnragePulseMaterial();
 	UMaterialInterface* GetHoverOutlineMaterial();
+	UMaterialInterface* GetRockMineDisplaceMaterial();
 
 	class UMaterialInstanceDynamic* CreatePoisonPulseMID(UObject* Outer);
 	class UMaterialInstanceDynamic* CreateTowerDamageDisplaceMID(UObject* Outer);
 	class UMaterialInstanceDynamic* CreateTierAuraMID(UObject* Outer);
 	class UMaterialInstanceDynamic* CreateEnragePulseMID(UObject* Outer);
 	class UMaterialInstanceDynamic* CreateHoverOutlineMID(UObject* Outer);
+	class UMaterialInstanceDynamic* CreateRockMineDisplaceMID(UObject* Outer);
 }

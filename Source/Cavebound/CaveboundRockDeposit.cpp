@@ -4,6 +4,7 @@
 #include "CaveboundHarvestBar.h"
 #include "CaveboundModelOutline.h"
 #include "CaveboundPlayerController.h"
+#include "CaveboundShaderMaterials.h"
 #include "CaveboundSoftVFX.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/SceneComponent.h"
@@ -11,6 +12,7 @@
 #include "Components/WidgetComponent.h"
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace
@@ -72,8 +74,57 @@ void ACaveboundRockDeposit::BeginPlay()
 		}
 	}
 
+	EnsureMineVisualMaterial();
 	RollYield();
 	CaveboundModelOutline::ApplyToActor(this);
+}
+
+void ACaveboundRockDeposit::EnsureMineVisualMaterial()
+{
+	if (!VisualMesh)
+	{
+		return;
+	}
+
+	VisualMesh->bDisallowNanite = true;
+
+	if (!MineVisualMaterial)
+	{
+		MineVisualMaterial = CaveboundShaderMaterials::CreateRockMineDisplaceMID(this);
+	}
+
+	if (MineVisualMaterial)
+	{
+		// Cover every slot so no leftover mesh material keeps animating WPO.
+		const int32 NumMaterials = FMath::Max(1, VisualMesh->GetNumMaterials());
+		for (int32 Index = 0; Index < NumMaterials; ++Index)
+		{
+			VisualMesh->SetMaterial(Index, MineVisualMaterial);
+		}
+	}
+}
+
+void ACaveboundRockDeposit::UpdateMineVisuals()
+{
+	EnsureMineVisualMaterial();
+	if (!MineVisualMaterial)
+	{
+		return;
+	}
+
+	const float Finished = static_cast<float>(RockTotal - RockRemaining);
+	const float Partial = (bHarvesting && SecondsPerRock > 0.f && RockRemaining > 0)
+		? (TickTime / SecondsPerRock) * static_cast<float>(FMath::Min(RocksPerHarvest, RockRemaining))
+		: 0.f;
+	const float MineAmount = (RockTotal > 0)
+		? FMath::Clamp((Finished + Partial) / static_cast<float>(RockTotal), 0.f, 1.f)
+		: 0.f;
+
+	MineVisualMaterial->SetScalarParameterValue(TEXT("MineAmount"), MineAmount);
+	// Kill any leftover V1 wobble params if an old MID somehow sticks around.
+	MineVisualMaterial->SetScalarParameterValue(TEXT("HarvestShake"), 0.f);
+	MineVisualMaterial->SetScalarParameterValue(TEXT("MaxCrumble"), 0.f);
+	MineVisualMaterial->SetScalarParameterValue(TEXT("WobbleSpeed"), 0.f);
 }
 
 void ACaveboundRockDeposit::RollYield()
@@ -109,6 +160,7 @@ void ACaveboundRockDeposit::RollYield()
 	}
 
 	HideBar();
+	UpdateMineVisuals();
 }
 
 bool ACaveboundRockDeposit::AddHarvestTime(float DeltaTime)
@@ -121,6 +173,7 @@ bool ACaveboundRockDeposit::AddHarvestTime(float DeltaTime)
 	bHarvesting = true;
 	TickTime += DeltaTime;
 	UpdateBar();
+	UpdateMineVisuals();
 
 	if (TickTime < SecondsPerRock)
 	{
@@ -156,6 +209,7 @@ bool ACaveboundRockDeposit::AddHarvestTime(float DeltaTime)
 	if (RockRemaining > 0)
 	{
 		UpdateBar();
+		UpdateMineVisuals();
 		return false;
 	}
 
@@ -173,6 +227,7 @@ void ACaveboundRockDeposit::StopHarvest()
 	TickTime = 0.f;
 	bHarvesting = false;
 	HideBar();
+	UpdateMineVisuals();
 }
 
 void ACaveboundRockDeposit::FinishHarvest()
@@ -181,6 +236,11 @@ void ACaveboundRockDeposit::FinishHarvest()
 	bHarvesting = false;
 	TickTime = 0.f;
 	WavesUntilReturn = FMath::Clamp(2 + RockTotal / 16, 2, 4);
+
+	if (MineVisualMaterial)
+	{
+		MineVisualMaterial->SetScalarParameterValue(TEXT("MineAmount"), 1.f);
+	}
 
 	SetActorHiddenInGame(true);
 	SetActorEnableCollision(false);
