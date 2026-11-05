@@ -22,7 +22,7 @@ struct FCaveboundBossPoisonVictim
 };
 
 /**
- * Stacking procedural boss — Warrior mesh scaled up, modifiers applied from GameMode stack.
+ * Stacking procedural boss — KayKit Rogue mesh scaled up, modifiers applied from GameMode stack.
  */
 UCLASS()
 class CAVEBOUND_API ACaveboundBossEnemy : public ACaveboundEnemy
@@ -60,11 +60,13 @@ protected:
 	virtual void OnDeath() override;
 	virtual AActor* ResolveAttackTarget() const override;
 	virtual void AttackCurrentTarget(float DeltaTime) override;
+	virtual void EnsureAnimationAssets() override;
 
 	void ApplyModifiers();
 	void ApplyStatScaling(int32 SpawnIndex);
 	void SetupAuraVisuals(int32 SpawnIndex);
 	void TriggerEnrageVisuals();
+	void WireBossCombatMontages();
 	FLinearColor ResolveTierAuraColor(int32 SpawnIndex) const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Boss")

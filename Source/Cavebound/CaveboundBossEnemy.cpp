@@ -1,9 +1,12 @@
 #include "CaveboundBossEnemy.h"
 
 #include "CaveboundGameMode.h"
+#include "CaveboundMinionAnimInstance.h"
 #include "CaveboundShaderMaterials.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimSequence.h"
 #include "Components/SplineComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
@@ -11,15 +14,23 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
+namespace CaveboundBossPaths
+{
+	const TCHAR* Mesh = TEXT("/Game/Characters/Skeleton/Skeleton_Rogue.Skeleton_Rogue");
+	const TCHAR* Melee = TEXT("/Game/Characters/Skeleton/Rig_Medium_CombatMeleeMelee_Dualwield_Attack_Slice.Rig_Medium_CombatMeleeMelee_Dualwield_Attack_Slice");
+	const TCHAR* MeleeAlt = TEXT("/Game/Characters/Skeleton/Rig_Medium_CombatMeleeMelee_Dualwield_Attack_Chop.Rig_Medium_CombatMeleeMelee_Dualwield_Attack_Chop");
+	const TCHAR* Hit = TEXT("/Game/Characters/Skeleton/Rig_Medium_GeneralHit_B.Rig_Medium_GeneralHit_B");
+	const TCHAR* Death = TEXT("/Game/Characters/Skeleton/Rig_Medium_GeneralDeath_B.Rig_Medium_GeneralDeath_B");
+}
+
 ACaveboundBossEnemy::ACaveboundBossEnemy()
 {
 	VisualMesh->SetRelativeScale3D(FVector(1.f));
 
-	static ConstructorHelpers::FObjectFinder<USkeletalMesh> WarriorMesh(
-		TEXT("/Game/Characters/Skeleton/Skeleton_Warrior.Skeleton_Warrior"));
-	if (WarriorMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> RogueMesh(CaveboundBossPaths::Mesh);
+	if (RogueMesh.Succeeded())
 	{
-		BodyMesh = WarriorMesh.Object;
+		BodyMesh = RogueMesh.Object;
 		Body->SetSkeletalMeshAsset(BodyMesh);
 	}
 
@@ -63,6 +74,69 @@ void ACaveboundBossEnemy::BeginPlay()
 	if (Body)
 	{
 		Body->SetRelativeScale3D(FVector(BossMeshScale));
+	}
+}
+
+void ACaveboundBossEnemy::EnsureAnimationAssets()
+{
+	Super::EnsureAnimationAssets();
+
+	if (!BodyMesh)
+	{
+		BodyMesh = LoadObject<USkeletalMesh>(nullptr, CaveboundBossPaths::Mesh);
+	}
+	if (Body && BodyMesh)
+	{
+		Body->SetSkeletalMeshAsset(BodyMesh);
+		Body->SetRelativeScale3D(FVector(BossMeshScale));
+	}
+
+	if (UAnimSequence* BossDeath = LoadObject<UAnimSequence>(nullptr, CaveboundBossPaths::Death))
+	{
+		DeathAnim = BossDeath;
+	}
+
+	WireBossCombatMontages();
+
+	if (UCaveboundMinionAnimInstance* Anim = GetMinionAnim())
+	{
+		Anim->SetRootMotionMode(ERootMotionMode::IgnoreRootMotion);
+	}
+}
+
+void ACaveboundBossEnemy::WireBossCombatMontages()
+{
+	auto MakeUpperBodyMontage = [](UAnimSequence* Sequence) -> UAnimMontage*
+	{
+		if (!Sequence)
+		{
+			return nullptr;
+		}
+		return UAnimMontage::CreateSlotAnimationAsDynamicMontage(
+			Sequence,
+			FName(TEXT("UpperBody")),
+			0.12f,
+			0.18f,
+			1.f,
+			1);
+	};
+
+	UAnimSequence* MeleeSeq = LoadObject<UAnimSequence>(nullptr, CaveboundBossPaths::Melee);
+	if (!MeleeSeq)
+	{
+		MeleeSeq = LoadObject<UAnimSequence>(nullptr, CaveboundBossPaths::MeleeAlt);
+	}
+	if (UAnimMontage* BossMelee = MakeUpperBodyMontage(MeleeSeq))
+	{
+		MeleeMontage = BossMelee;
+	}
+
+	if (UAnimSequence* HitSeq = LoadObject<UAnimSequence>(nullptr, CaveboundBossPaths::Hit))
+	{
+		if (UAnimMontage* BossHit = MakeUpperBodyMontage(HitSeq))
+		{
+			HitMontage = BossHit;
+		}
 	}
 }
 

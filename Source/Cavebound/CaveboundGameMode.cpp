@@ -85,7 +85,85 @@ void ACaveboundGameMode::EnsureGameplayReady()
 	EnsureTree();
 	EnsureEnemySpawnConfig();
 	CollectPathSplines();
+	EnforceBuildSlotSpacing();
 	EnsureRockField();
+}
+
+void ACaveboundGameMode::EnforceBuildSlotSpacing()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UClass* SlotClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_BuildSlot.BP_BuildSlot_C"));
+	if (!SlotClass)
+	{
+		return;
+	}
+
+	constexpr float MinSlotSpacing = 400.f;
+	TArray<AActor*> Slots;
+	UGameplayStatics::GetAllActorsOfClass(World, SlotClass, Slots);
+	if (Slots.Num() < 2)
+	{
+		return;
+	}
+
+	const FBoolProperty* OccupiedProperty = FindFProperty<FBoolProperty>(SlotClass, TEXT("IsOccupied"));
+	TArray<FVector> KeptLocations;
+	KeptLocations.Reserve(Slots.Num());
+
+	// Keep occupied slots first so this cleanup never removes a slot that already holds a tower.
+	for (AActor* Slot : Slots)
+	{
+		if (!IsValid(Slot))
+		{
+			continue;
+		}
+
+		const bool bOccupied = OccupiedProperty && OccupiedProperty->GetPropertyValue_InContainer(Slot);
+		if (bOccupied)
+		{
+			KeptLocations.Add(Slot->GetActorLocation());
+		}
+	}
+
+	int32 RemovedSlots = 0;
+	for (AActor* Slot : Slots)
+	{
+		if (!IsValid(Slot))
+		{
+			continue;
+		}
+
+		if (OccupiedProperty && OccupiedProperty->GetPropertyValue_InContainer(Slot))
+		{
+			continue;
+		}
+
+		const FVector Location = Slot->GetActorLocation();
+		const bool bTooClose = KeptLocations.ContainsByPredicate([&](const FVector& Existing)
+		{
+			return FVector::Dist2D(Location, Existing) < MinSlotSpacing;
+		});
+
+		if (bTooClose)
+		{
+			Slot->Destroy();
+			++RemovedSlots;
+		}
+		else
+		{
+			KeptLocations.Add(Location);
+		}
+	}
+
+	if (RemovedSlots > 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("EnforceBuildSlotSpacing: removed %d overlapping build slots (minimum %.0f cm)"), RemovedSlots, MinSlotSpacing);
+	}
 }
 
 void ACaveboundGameMode::EnsurePlayerSpawnClearOfTree()

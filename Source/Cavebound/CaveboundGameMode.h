@@ -143,6 +143,8 @@ public:
 protected:
 	// Spawn the magical wood tree if the level does not already have one
 	void EnsureTree();
+	/** Remove unoccupied build slots that are closer than the terrain's intended spacing. */
+	void EnforceBuildSlotSpacing();
 	/** Move the player out if they spawned inside the tree collision. */
 	void EnsurePlayerSpawnClearOfTree();
 	void EnsureRockField();

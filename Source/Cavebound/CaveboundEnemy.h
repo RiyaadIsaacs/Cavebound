@@ -33,7 +33,7 @@ protected:
 	virtual void OnMeleeStrike() override;
 	virtual void GatherHoverGlowMeshes(TArray<UMeshComponent*>& OutMeshes) const override;
 
-	void EnsureAnimationAssets();
+	virtual void EnsureAnimationAssets();
 	void UpdatePresentation(float DeltaTime, const FVector& LocationBeforeTick);
 	bool PlayUpperBodyMontage(UAnimMontage* Montage);
 	UCaveboundMinionAnimInstance* GetMinionAnim() const;
