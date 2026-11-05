@@ -1268,15 +1268,13 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 
 void ACaveboundPlayerController::EnsureDamageVignette()
 {
-	if (DamageVignette)
+	if (!DamageVignette)
 	{
-		return;
+		DamageVignette = NewObject<UCaveboundDamageVignette>(this);
 	}
-
-	DamageVignette = CreateWidget<UCaveboundDamageVignette>(this, UCaveboundDamageVignette::StaticClass());
 	if (DamageVignette)
 	{
-		DamageVignette->AddToViewport(30);
+		DamageVignette->Ensure(GetWorld());
 	}
 }
 

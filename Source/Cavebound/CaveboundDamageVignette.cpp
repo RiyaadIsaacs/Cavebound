@@ -1,104 +1,233 @@
 #include "CaveboundDamageVignette.h"
-#include "Blueprint/WidgetTree.h"
-#include "Components/CanvasPanel.h"
-#include "Components/CanvasPanelSlot.h"
-#include "Components/Image.h"
-#include "Engine/Texture2D.h"
-#include "TextureResource.h"
 
-UTexture2D* UCaveboundDamageVignette::GetRadialTexture()
+#include "Engine/PostProcessVolume.h"
+#include "Engine/Scene.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialExpressionCustom.h"
+#include "Materials/MaterialExpressionScalarParameter.h"
+#include "Materials/MaterialExpressionSceneTexture.h"
+#include "Materials/MaterialExpressionScreenPosition.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/Package.h"
+
+#if WITH_EDITOR
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Misc/PackageName.h"
+#include "UObject/SavePackage.h"
+#endif
+
+namespace
 {
-	static TWeakObjectPtr<UTexture2D> Cached;
-	if (UTexture2D* Existing = Cached.Get())
+	// V2: no GetViewportUV() — that fails to compile in custom PP material nodes.
+	constexpr const TCHAR* VignettePackage = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundDamageVignetteV2");
+	constexpr const TCHAR* VignettePath = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundDamageVignetteV2.PP_CaveboundDamageVignetteV2");
+	constexpr const TCHAR* VolumeTag = TEXT("CaveboundDamageVignette");
+	constexpr const TCHAR* StrengthParamName = TEXT("Strength");
+
+#if WITH_EDITORONLY_DATA
+	UMaterial* BuildVignetteMaterial(UObject* Outer, FName AssetName)
+	{
+		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
+		Material->MaterialDomain = MD_PostProcess;
+		Material->BlendableLocation = BL_SceneColorAfterTonemapping;
+		Material->bAutomaticallySetUsageInEditor = true;
+
+		UMaterialEditorOnlyData* EditorData = Material->GetEditorOnlyData();
+		if (!EditorData)
+		{
+			return Material;
+		}
+
+		UMaterialExpressionScreenPosition* ScreenPos = NewObject<UMaterialExpressionScreenPosition>(Material);
+		EditorData->ExpressionCollection.AddExpression(ScreenPos);
+
+		UMaterialExpressionSceneTexture* SceneColorTex = NewObject<UMaterialExpressionSceneTexture>(Material);
+		SceneColorTex->SceneTextureId = PPI_PostProcessInput0;
+		SceneColorTex->bFiltered = false;
+		EditorData->ExpressionCollection.AddExpression(SceneColorTex);
+
+		UMaterialExpressionScalarParameter* StrengthParam = NewObject<UMaterialExpressionScalarParameter>(Material);
+		StrengthParam->ParameterName = StrengthParamName;
+		StrengthParam->DefaultValue = 0.f;
+		EditorData->ExpressionCollection.AddExpression(StrengthParam);
+
+		UMaterialExpressionCustom* Custom = NewObject<UMaterialExpressionCustom>(Material);
+		Custom->Description = TEXT("CaveboundDamageVignetteV2");
+		Custom->OutputType = CMOT_Float3;
+		// Scene color from SceneTexture node; radial mask from ScreenPosition ViewportUV.
+		Custom->Code = TEXT(
+			"float3 SceneColor = SceneColorRef.rgb;\n"
+			"float Amt = saturate(Strength);\n"
+			"if (Amt <= 0.001)\n"
+			"{\n"
+			"	return SceneColor;\n"
+			"}\n"
+			"float2 ViewportUV = UV.xy;\n"
+			"float2 C = ViewportUV * 2.0 - 1.0;\n"
+			"float Dist = length(C);\n"
+			"float V = saturate(smoothstep(0.30, 1.15, Dist));\n"
+			"V = pow(V, 1.4);\n"
+			"float3 Edge = SceneColor * float3(0.25, 0.02, 0.02) + float3(0.55, 0.02, 0.02);\n"
+			"return lerp(SceneColor, Edge, saturate(V * Amt));\n");
+		EditorData->ExpressionCollection.AddExpression(Custom);
+
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("UV");
+			ScreenPos->ConnectExpression(&In.Input, 0);
+		}
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("SceneColorRef");
+			SceneColorTex->ConnectExpression(&In.Input, 0);
+		}
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("Strength");
+			StrengthParam->ConnectExpression(&In.Input, 0);
+		}
+
+		Custom->ConnectExpression(&EditorData->EmissiveColor, 0);
+
+		Material->PreEditChange(nullptr);
+		Material->PostEditChange();
+		return Material;
+	}
+
+#if WITH_EDITOR
+	void TrySaveMaterialAsset(UMaterial* Material, const TCHAR* LongPackageName)
+	{
+		if (!Material)
+		{
+			return;
+		}
+		UPackage* Package = Material->GetOutermost();
+		if (!Package)
+		{
+			return;
+		}
+		Package->MarkPackageDirty();
+		FAssetRegistryModule::AssetCreated(Material);
+		const FString Filename = FPackageName::LongPackageNameToFilename(
+			LongPackageName,
+			FPackageName::GetAssetPackageExtension());
+		FSavePackageArgs SaveArgs;
+		SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+		UPackage::SavePackage(Package, Material, *Filename, SaveArgs);
+	}
+#endif
+#endif // WITH_EDITORONLY_DATA
+}
+
+UMaterialInterface* UCaveboundDamageVignette::GetOrBuildMaterial()
+{
+	if (UMaterialInterface* Existing = LoadObject<UMaterialInterface>(nullptr, VignettePath))
 	{
 		return Existing;
 	}
 
-	// Soft radial mask: transparent in the middle, red toward the edges.
-	const int32 Size = 512;
-	UTexture2D* Texture = UTexture2D::CreateTransient(Size, Size, PF_B8G8R8A8);
-	if (!Texture)
+#if WITH_EDITORONLY_DATA
+	static TWeakObjectPtr<UMaterial> TransientCache;
+	if (UMaterial* Cached = TransientCache.Get())
 	{
-		return nullptr;
+		return Cached;
 	}
 
-	Texture->CompressionSettings = TextureCompressionSettings::TC_EditorIcon;
-	Texture->LODGroup = TextureGroup::TEXTUREGROUP_UI;
-	Texture->SRGB = true;
-	Texture->Filter = TF_Bilinear;
-	Texture->AddressX = TA_Clamp;
-	Texture->AddressY = TA_Clamp;
-
-	FTexturePlatformData* PlatformData = Texture->GetPlatformData();
-	if (!PlatformData || PlatformData->Mips.Num() == 0)
-	{
-		return nullptr;
-	}
-
-	FTexture2DMipMap& Mip = PlatformData->Mips[0];
-	void* Data = Mip.BulkData.Lock(LOCK_READ_WRITE);
-	FColor* Pixels = static_cast<FColor*>(Data);
-
-	const float Inv = 1.f / static_cast<float>(Size - 1);
-	for (int32 Y = 0; Y < Size; ++Y)
-	{
-		for (int32 X = 0; X < Size; ++X)
-		{
-			const float U = X * Inv * 2.f - 1.f;
-			const float V = Y * Inv * 2.f - 1.f;
-			const float Dist = FMath::Sqrt(U * U + V * V);
-
-			// Keep the centre clear; only the outer ring reads as vignette.
-			float Alpha = FMath::SmoothStep(0.3f, 1.15f, Dist);
-			Alpha = FMath::Pow(Alpha, 1.4f);
-
-			Pixels[Y * Size + X] = FColor(190, 12, 12, static_cast<uint8>(FMath::Clamp(Alpha * 255.f, 0.f, 255.f)));
-		}
-	}
-
-	Mip.BulkData.Unlock();
-	Texture->UpdateResource();
-	Cached = Texture;
-	return Texture;
+#if WITH_EDITOR
+	UPackage* Package = CreatePackage(VignettePackage);
+	Package->FullyLoad();
+	UMaterial* AssetMaterial = BuildVignetteMaterial(Package, TEXT("PP_CaveboundDamageVignetteV2"));
+	TrySaveMaterialAsset(AssetMaterial, VignettePackage);
+	TransientCache = AssetMaterial;
+	return AssetMaterial;
+#else
+	UMaterial* RuntimeMaterial = BuildVignetteMaterial(GetTransientPackage(), TEXT("PP_CaveboundDamageVignetteV2"));
+	TransientCache = RuntimeMaterial;
+	return RuntimeMaterial;
+#endif
+#else
+	return nullptr;
+#endif
 }
 
-void UCaveboundDamageVignette::NativeOnInitialized()
+void UCaveboundDamageVignette::BindToWorld(UWorld* World)
 {
-	Super::NativeOnInitialized();
-
-	SetVisibility(ESlateVisibility::Collapsed);
-
-	if (!WidgetTree || WidgetTree->RootWidget)
+	if (!World || !VignetteMID)
 	{
 		return;
 	}
 
-	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("VignetteCanvas"));
-	Canvas->SetVisibility(ESlateVisibility::HitTestInvisible);
-	WidgetTree->RootWidget = Canvas;
-
-	VignetteImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("VignetteImage"));
-	VignetteImage->SetVisibility(ESlateVisibility::HitTestInvisible);
-	VignetteImage->SetColorAndOpacity(FLinearColor(1.f, 1.f, 1.f, 0.f));
-
-	if (UTexture2D* Radial = GetRadialTexture())
+	if (!IsValid(Volume))
 	{
-		VignetteImage->SetBrushFromTexture(Radial, true);
+		for (TActorIterator<APostProcessVolume> It(World); It; ++It)
+		{
+			APostProcessVolume* Existing = *It;
+			if (Existing && Existing->ActorHasTag(VolumeTag))
+			{
+				Volume = Existing;
+				break;
+			}
+		}
 	}
 
-	if (UCanvasPanelSlot* ImageSlot = Canvas->AddChildToCanvas(VignetteImage))
+	if (!IsValid(Volume))
 	{
-		// Stretch one radial image across the whole viewport.
-		ImageSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
-		ImageSlot->SetOffsets(FMargin(0.f));
+		FActorSpawnParameters Params;
+		Params.Name = TEXT("CaveboundDamageVignetteVolume");
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Volume = World->SpawnActor<APostProcessVolume>(
+			APostProcessVolume::StaticClass(),
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			Params);
+		if (Volume)
+		{
+			Volume->Tags.AddUnique(VolumeTag);
+		}
 	}
+
+	if (IsValid(Volume))
+	{
+		Volume->bUnbound = true;
+		Volume->Priority = 120.f;
+		Volume->BlendWeight = 1.f;
+		Volume->bEnabled = true;
+
+		FPostProcessSettings& Settings = Volume->Settings;
+		Settings.WeightedBlendables.Array.Reset();
+		FWeightedBlendable Blend;
+		Blend.Object = VignetteMID;
+		Blend.Weight = 1.f;
+		Settings.WeightedBlendables.Array.Add(Blend);
+	}
+}
+
+void UCaveboundDamageVignette::Ensure(UWorld* World)
+{
+	if (!VignetteMID)
+	{
+		if (UMaterialInterface* Base = GetOrBuildMaterial())
+		{
+			VignetteMID = UMaterialInstanceDynamic::Create(Base, this);
+			if (VignetteMID)
+			{
+				VignetteMID->SetScalarParameterValue(StrengthParamName, 0.f);
+			}
+		}
+	}
+
+	BindToWorld(World);
+	SetStrength(bActive ? PeakStrength * (Life / FMath::Max(Duration, 0.05f)) : 0.f);
 }
 
 void UCaveboundDamageVignette::SetStrength(float Alpha)
 {
-	if (VignetteImage)
+	if (VignetteMID)
 	{
-		VignetteImage->SetColorAndOpacity(FLinearColor(1.f, 1.f, 1.f, FMath::Clamp(Alpha, 0.f, 1.f)));
+		VignetteMID->SetScalarParameterValue(StrengthParamName, FMath::Clamp(Alpha, 0.f, 1.f));
 	}
 }
 
@@ -108,7 +237,6 @@ void UCaveboundDamageVignette::Pulse(float Strength, float InDuration)
 	Duration = FMath::Max(0.05f, InDuration);
 	Life = Duration;
 	bActive = true;
-	SetVisibility(ESlateVisibility::HitTestInvisible);
 	SetStrength(PeakStrength);
 }
 
@@ -124,11 +252,9 @@ void UCaveboundDamageVignette::TickFade(float DeltaTime)
 	{
 		bActive = false;
 		SetStrength(0.f);
-		SetVisibility(ESlateVisibility::Collapsed);
 		return;
 	}
 
 	const float T = Life / Duration;
-	// Hard hit, then ease out.
 	SetStrength(PeakStrength * FMath::InterpEaseIn(0.f, 1.f, T, 2.f));
 }

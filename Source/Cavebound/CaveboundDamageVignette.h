@@ -1,34 +1,38 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "UObject/Object.h"
 #include "CaveboundDamageVignette.generated.h"
 
-class UImage;
-class UTexture2D;
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
+class APostProcessVolume;
+class UWorld;
 
 /**
- * Full-screen soft radial red vignette (real circle falloff, not edge bars).
- * Call Pulse() when the tree takes damage.
+ * Screen-space radial red damage vignette (post-process), pulsed when the tree is hit.
  */
 UCLASS()
-class CAVEBOUND_API UCaveboundDamageVignette : public UUserWidget
+class CAVEBOUND_API UCaveboundDamageVignette : public UObject
 {
 	GENERATED_BODY()
 
 public:
+	void Ensure(UWorld* World);
 	void Pulse(float Strength = 0.75f, float Duration = 0.55f);
 	void TickFade(float DeltaTime);
 	bool IsActive() const { return bActive; }
 
 protected:
-	virtual void NativeOnInitialized() override;
-
 	void SetStrength(float Alpha);
-	static UTexture2D* GetRadialTexture();
+	void BindToWorld(UWorld* World);
+	static UMaterialInterface* GetOrBuildMaterial();
 
 	UPROPERTY()
-	TObjectPtr<UImage> VignetteImage;
+	TObjectPtr<UMaterialInstanceDynamic> VignetteMID;
+
+	UPROPERTY()
+	TObjectPtr<APostProcessVolume> Volume;
 
 	float Life = 0.f;
 	float Duration = 0.55f;
