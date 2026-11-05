@@ -1,4 +1,5 @@
 #include "CaveboundTerrainExpansion.h"
+#include "CaveboundRockDeposit.h"
 #include "Components/SplineComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
@@ -348,6 +349,16 @@ namespace CaveboundTerrainExpansionPrivate
 
 		TArray<FVector> Existing;
 		GatherExistingSlotLocations(World, Existing);
+		TArray<FVector> RockDepositLocations;
+		TArray<AActor*> RockDeposits;
+		UGameplayStatics::GetAllActorsOfClass(World, ACaveboundRockDeposit::StaticClass(), RockDeposits);
+		for (const AActor* RockDeposit : RockDeposits)
+		{
+			if (RockDeposit)
+			{
+				RockDepositLocations.Add(RockDeposit->GetActorLocation());
+			}
+		}
 		const int32 ExistingCount = Existing.Num();
 
 		const float Lateral = FMath::Max(50.f, PathWidth * 0.5f + SidePadding);
@@ -388,6 +399,10 @@ namespace CaveboundTerrainExpansionPrivate
 					Candidate.Z = Centre.Z;
 
 					if (!IsFarEnough(Candidate, Existing, Step * 0.9f))
+					{
+						continue;
+					}
+					if (!IsFarEnough(Candidate, RockDepositLocations, 300.f))
 					{
 						continue;
 					}

@@ -6,6 +6,7 @@
 #include "CaveboundHoverHealth.h"
 #include "CaveboundBaseEnemy.generated.h"
 
+class UMeshComponent;
 class UStaticMeshComponent;
 class USplineComponent;
 class ACaveboundTree;
@@ -23,6 +24,7 @@ class CAVEBOUND_API ACaveboundBaseEnemy : public AActor, public ICaveboundHoverH
 public:
 	ACaveboundBaseEnemy();
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
 	// ICaveboundHoverHealth interface for the HUD to show HP on mouse hover
@@ -60,6 +62,9 @@ public:
 	float GetMaxLaneOffset() const { return MaxLaneOffset; }
 
 	bool IsDead() const { return Health <= 0.f; }
+
+	/** Meshes that should receive hover / damage-style overlays. */
+	virtual void GatherHoverGlowMeshes(TArray<UMeshComponent*>& OutMeshes) const;
 
 protected:
 	// Walk along PathSpline

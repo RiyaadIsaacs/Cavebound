@@ -143,6 +143,8 @@ public:
 protected:
 	// Spawn the magical wood tree if the level does not already have one
 	void EnsureTree();
+	/** Move the player out if they spawned inside the tree collision. */
+	void EnsurePlayerSpawnClearOfTree();
 	void EnsureRockField();
 	void NotifyRockDepositsWaveEnded();
 	// Guarantee concrete EnemyClass

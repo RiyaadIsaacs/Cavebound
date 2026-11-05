@@ -36,7 +36,7 @@ protected:
 		bool bFromSweep,
 		const FHitResult& SweepResult);
 
-	void TryHitEnemy(AActor* OtherActor);
+	virtual void TryHitEnemy(AActor* OtherActor);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mesh")
 	TObjectPtr<UStaticMeshComponent> VisualMesh;
