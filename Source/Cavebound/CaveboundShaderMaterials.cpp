@@ -34,6 +34,10 @@ namespace CaveboundShaderMaterials
 	static constexpr const TCHAR* PoisonPulsePath = TEXT("/Game/Assets/Materials/M_PoisonPulse.M_PoisonPulse");
 	static constexpr const TCHAR* TowerDamagePackage = TEXT("/Game/Assets/Materials/M_TowerDamageDisplace");
 	static constexpr const TCHAR* TowerDamagePath = TEXT("/Game/Assets/Materials/M_TowerDamageDisplace.M_TowerDamageDisplace");
+	static constexpr const TCHAR* TierAuraPackage = TEXT("/Game/Assets/Materials/M_TierAura");
+	static constexpr const TCHAR* TierAuraPath = TEXT("/Game/Assets/Materials/M_TierAura.M_TierAura");
+	static constexpr const TCHAR* EnragePulsePackage = TEXT("/Game/Assets/Materials/M_EnragePulse");
+	static constexpr const TCHAR* EnragePulsePath = TEXT("/Game/Assets/Materials/M_EnragePulse.M_EnragePulse");
 	static constexpr const TCHAR* TowerTexturePath = TEXT("/Game/Assets/Models/Towers/T_FortressElves.T_FortressElves");
 
 #if WITH_EDITORONLY_DATA
@@ -153,6 +157,189 @@ namespace CaveboundShaderMaterials
 		ColourLerp->ConnectExpression(&EditorData->BaseColor, 0);
 		Opacity->ConnectExpression(&EditorData->Opacity, 0);
 
+		FinalizeMaterial(Material);
+		return Material;
+	}
+
+	static UMaterial* BuildTierAuraMaterial(UObject* Outer, FName AssetName)
+	{
+		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
+		Material->MaterialDomain = MD_Surface;
+		Material->BlendMode = BLEND_Translucent;
+		Material->SetShadingModel(MSM_Unlit);
+		Material->TwoSided = true;
+		Material->TranslucencyLightingMode = TLM_Surface;
+		Material->bAutomaticallySetUsageInEditor = true;
+
+		UMaterialEditorOnlyData* EditorData = Material->GetEditorOnlyData();
+		if (!EditorData)
+		{
+			return Material;
+		}
+
+		UMaterialExpressionVectorParameter* AuraA = NewObject<UMaterialExpressionVectorParameter>(Material);
+		AuraA->ParameterName = TEXT("AuraColorA");
+		AuraA->DefaultValue = FLinearColor(1.f, 1.f, 1.f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(AuraA);
+
+		UMaterialExpressionVectorParameter* AuraB = NewObject<UMaterialExpressionVectorParameter>(Material);
+		AuraB->ParameterName = TEXT("AuraColorB");
+		AuraB->DefaultValue = FLinearColor(0.85f, 0.9f, 1.f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(AuraB);
+
+		UMaterialExpressionScalarParameter* PulseSpeed = NewObject<UMaterialExpressionScalarParameter>(Material);
+		PulseSpeed->ParameterName = TEXT("PulseSpeed");
+		PulseSpeed->DefaultValue = 1.2f;
+		EditorData->ExpressionCollection.AddExpression(PulseSpeed);
+
+		UMaterialExpressionScalarParameter* Opacity = NewObject<UMaterialExpressionScalarParameter>(Material);
+		Opacity->ParameterName = TEXT("Opacity");
+		Opacity->DefaultValue = 0.28f;
+		EditorData->ExpressionCollection.AddExpression(Opacity);
+
+		UMaterialExpressionTime* TimeNode = NewObject<UMaterialExpressionTime>(Material);
+		EditorData->ExpressionCollection.AddExpression(TimeNode);
+
+		UMaterialExpressionMultiply* TimeScaled = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(TimeScaled);
+		TimeScaled->A.Connect(0, TimeNode);
+		TimeScaled->B.Connect(0, PulseSpeed);
+
+		UMaterialExpressionSine* SineNode = NewObject<UMaterialExpressionSine>(Material);
+		EditorData->ExpressionCollection.AddExpression(SineNode);
+		SineNode->Input.Connect(0, TimeScaled);
+
+		UMaterialExpressionConstant* One = NewObject<UMaterialExpressionConstant>(Material);
+		One->R = 1.f;
+		EditorData->ExpressionCollection.AddExpression(One);
+
+		UMaterialExpressionAdd* SinePlusOne = NewObject<UMaterialExpressionAdd>(Material);
+		EditorData->ExpressionCollection.AddExpression(SinePlusOne);
+		SinePlusOne->A.Connect(0, SineNode);
+		SinePlusOne->B.Connect(0, One);
+
+		UMaterialExpressionConstant* Half = NewObject<UMaterialExpressionConstant>(Material);
+		Half->R = 0.5f;
+		EditorData->ExpressionCollection.AddExpression(Half);
+
+		UMaterialExpressionMultiply* Alpha = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(Alpha);
+		Alpha->A.Connect(0, SinePlusOne);
+		Alpha->B.Connect(0, Half);
+
+		UMaterialExpressionLinearInterpolate* ColourLerp = NewObject<UMaterialExpressionLinearInterpolate>(Material);
+		EditorData->ExpressionCollection.AddExpression(ColourLerp);
+		ColourLerp->A.Connect(0, AuraA);
+		ColourLerp->B.Connect(0, AuraB);
+		ColourLerp->Alpha.Connect(0, Alpha);
+
+		ColourLerp->ConnectExpression(&EditorData->EmissiveColor, 0);
+		ColourLerp->ConnectExpression(&EditorData->BaseColor, 0);
+		Opacity->ConnectExpression(&EditorData->Opacity, 0);
+
+		FinalizeMaterial(Material);
+		return Material;
+	}
+
+	static UMaterial* BuildEnragePulseMaterial(UObject* Outer, FName AssetName)
+	{
+		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
+		Material->MaterialDomain = MD_Surface;
+		Material->BlendMode = BLEND_Opaque;
+		Material->SetShadingModel(MSM_DefaultLit);
+		Material->TwoSided = false;
+		Material->bAutomaticallySetUsageInEditor = true;
+
+		UMaterialEditorOnlyData* EditorData = Material->GetEditorOnlyData();
+		if (!EditorData)
+		{
+			return Material;
+		}
+
+		UMaterialExpressionVectorParameter* PurpleA = NewObject<UMaterialExpressionVectorParameter>(Material);
+		PurpleA->ParameterName = TEXT("PurpleA");
+		PurpleA->DefaultValue = FLinearColor(0.35f, 0.05f, 0.55f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(PurpleA);
+
+		UMaterialExpressionVectorParameter* PurpleB = NewObject<UMaterialExpressionVectorParameter>(Material);
+		PurpleB->ParameterName = TEXT("PurpleB");
+		PurpleB->DefaultValue = FLinearColor(0.85f, 0.2f, 1.f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(PurpleB);
+
+		UMaterialExpressionVectorParameter* GlowColor = NewObject<UMaterialExpressionVectorParameter>(Material);
+		GlowColor->ParameterName = TEXT("_EnrageGlowColor");
+		GlowColor->DefaultValue = FLinearColor(0.65f, 0.1f, 1.f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(GlowColor);
+
+		UMaterialExpressionScalarParameter* PulseSpeed = NewObject<UMaterialExpressionScalarParameter>(Material);
+		PulseSpeed->ParameterName = TEXT("PulseSpeed");
+		PulseSpeed->DefaultValue = 2.5f;
+		EditorData->ExpressionCollection.AddExpression(PulseSpeed);
+
+		UMaterialExpressionScalarParameter* Displace = NewObject<UMaterialExpressionScalarParameter>(Material);
+		Displace->ParameterName = TEXT("DisplacementStrength");
+		Displace->DefaultValue = 4.f;
+		EditorData->ExpressionCollection.AddExpression(Displace);
+
+		UMaterialExpressionTime* TimeNode = NewObject<UMaterialExpressionTime>(Material);
+		EditorData->ExpressionCollection.AddExpression(TimeNode);
+
+		UMaterialExpressionMultiply* TimeScaled = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(TimeScaled);
+		TimeScaled->A.Connect(0, TimeNode);
+		TimeScaled->B.Connect(0, PulseSpeed);
+
+		UMaterialExpressionSine* SineNode = NewObject<UMaterialExpressionSine>(Material);
+		EditorData->ExpressionCollection.AddExpression(SineNode);
+		SineNode->Input.Connect(0, TimeScaled);
+
+		UMaterialExpressionConstant* One = NewObject<UMaterialExpressionConstant>(Material);
+		One->R = 1.f;
+		EditorData->ExpressionCollection.AddExpression(One);
+
+		UMaterialExpressionAdd* SinePlusOne = NewObject<UMaterialExpressionAdd>(Material);
+		EditorData->ExpressionCollection.AddExpression(SinePlusOne);
+		SinePlusOne->A.Connect(0, SineNode);
+		SinePlusOne->B.Connect(0, One);
+
+		UMaterialExpressionConstant* Half = NewObject<UMaterialExpressionConstant>(Material);
+		Half->R = 0.5f;
+		EditorData->ExpressionCollection.AddExpression(Half);
+
+		UMaterialExpressionMultiply* Alpha = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(Alpha);
+		Alpha->A.Connect(0, SinePlusOne);
+		Alpha->B.Connect(0, Half);
+
+		UMaterialExpressionLinearInterpolate* ColourLerp = NewObject<UMaterialExpressionLinearInterpolate>(Material);
+		EditorData->ExpressionCollection.AddExpression(ColourLerp);
+		ColourLerp->A.Connect(0, PurpleA);
+		ColourLerp->B.Connect(0, PurpleB);
+		ColourLerp->Alpha.Connect(0, Alpha);
+		ColourLerp->ConnectExpression(&EditorData->BaseColor, 0);
+
+		UMaterialExpressionMultiply* Emissive = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(Emissive);
+		Emissive->A.Connect(0, GlowColor);
+		Emissive->B.Connect(0, Alpha);
+		Emissive->ConnectExpression(&EditorData->EmissiveColor, 0);
+
+		UMaterialExpressionVertexNormalWS* NormalWS = NewObject<UMaterialExpressionVertexNormalWS>(Material);
+		EditorData->ExpressionCollection.AddExpression(NormalWS);
+
+		UMaterialExpressionMultiply* WpoAmount = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(WpoAmount);
+		WpoAmount->A.Connect(0, SineNode);
+		WpoAmount->B.Connect(0, Displace);
+
+		UMaterialExpressionMultiply* Wpo = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(Wpo);
+		Wpo->A.Connect(0, NormalWS);
+		Wpo->B.Connect(0, WpoAmount);
+		Wpo->ConnectExpression(&EditorData->WorldPositionOffset, 0);
+
+		bool bNeedsRecompile = false;
+		Material->SetMaterialUsage(bNeedsRecompile, MATUSAGE_SkeletalMesh);
 		FinalizeMaterial(Material);
 		return Material;
 	}
@@ -337,6 +524,32 @@ namespace CaveboundShaderMaterials
 #endif
 	}
 
+	UMaterialInterface* GetTierAuraMaterial()
+	{
+#if WITH_EDITORONLY_DATA
+		return EnsureContentMaterial(
+			TierAuraPath,
+			TierAuraPackage,
+			TEXT("M_TierAura"),
+			[](UObject* Outer, FName Name) { return BuildTierAuraMaterial(Outer, Name); });
+#else
+		return LoadObject<UMaterialInterface>(nullptr, TierAuraPath);
+#endif
+	}
+
+	UMaterialInterface* GetEnragePulseMaterial()
+	{
+#if WITH_EDITORONLY_DATA
+		return EnsureContentMaterial(
+			EnragePulsePath,
+			EnragePulsePackage,
+			TEXT("M_EnragePulse"),
+			[](UObject* Outer, FName Name) { return BuildEnragePulseMaterial(Outer, Name); });
+#else
+		return LoadObject<UMaterialInterface>(nullptr, EnragePulsePath);
+#endif
+	}
+
 	UMaterialInstanceDynamic* CreatePoisonPulseMID(UObject* Outer)
 	{
 		UMaterialInterface* Parent = GetPoisonPulseMaterial();
@@ -350,6 +563,26 @@ namespace CaveboundShaderMaterials
 	UMaterialInstanceDynamic* CreateTowerDamageDisplaceMID(UObject* Outer)
 	{
 		UMaterialInterface* Parent = GetTowerDamageDisplaceMaterial();
+		if (!Parent || !Outer)
+		{
+			return nullptr;
+		}
+		return UMaterialInstanceDynamic::Create(Parent, Outer);
+	}
+
+	UMaterialInstanceDynamic* CreateTierAuraMID(UObject* Outer)
+	{
+		UMaterialInterface* Parent = GetTierAuraMaterial();
+		if (!Parent || !Outer)
+		{
+			return nullptr;
+		}
+		return UMaterialInstanceDynamic::Create(Parent, Outer);
+	}
+
+	UMaterialInstanceDynamic* CreateEnragePulseMID(UObject* Outer)
+	{
+		UMaterialInterface* Parent = GetEnragePulseMaterial();
 		if (!Parent || !Outer)
 		{
 			return nullptr;

@@ -1,4 +1,5 @@
 #include "CaveboundGameMode.h"
+#include "CaveboundBossEnemy.h"
 #include "CaveboundBruteEnemy.h"
 #include "CaveboundCharacter.h"
 #include "CaveboundEnemy.h"
@@ -42,6 +43,8 @@ ACaveboundGameMode::ACaveboundGameMode()
 void ACaveboundGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
+	BossSpawnCount = 0;
+	StackedBossModifiers.Reset();
 }
 
 void ACaveboundGameMode::StartPlay()
@@ -51,6 +54,8 @@ void ACaveboundGameMode::StartPlay()
 	RoundState = ECaveboundRoundState::Idle;
 	bGameOver = false;
 	bEndRoundPending = false;
+	BossSpawnCount = 0;
+	StackedBossModifiers.Reset();
 
 	UE_LOG(
 		LogTemp,
@@ -631,17 +636,48 @@ void ACaveboundGameMode::BeginCombatPhase()
 	PrepareWaveBudget();
 	CollectPathSplines();
 
-	UE_LOG(
-		LogTemp,
-		Log,
-		TEXT("BeginCombatPhase: spawn %d enemies, interval=%.2fs, paths=%d, class=%s"),
-		EnemiesToSpawnThisRound,
-		GetCurrentSpawnInterval(),
-		PathSplines.Num(),
-		EnemyClass ? *EnemyClass->GetName() : TEXT("null"));
+	const bool bBossRound = IsBossRound();
+	if (bBossRound)
+	{
+		++BossSpawnCount;
+		PickNextBossModifier();
 
-	// First enemy immediately — do not depend solely on the repeating timer first-fire.
-	SpawnEnemy();
+		if (BossSpawnCount == 1)
+		{
+			// First boss appearance: boss only, no regular pack.
+			EnemiesToSpawnThisRound = 1;
+		}
+		else
+		{
+			// Later bosses ride with the Adaptive Threat Budget wave.
+			EnemiesToSpawnThisRound += 1;
+		}
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("BeginCombatPhase BOSS #%d: total slots=%d (solo=%s), stacked mods=%d"),
+			BossSpawnCount,
+			EnemiesToSpawnThisRound,
+			BossSpawnCount == 1 ? TEXT("yes") : TEXT("no"),
+			StackedBossModifiers.Num());
+
+		SpawnBossEnemy();
+	}
+	else
+	{
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("BeginCombatPhase: spawn %d enemies, interval=%.2fs, paths=%d, class=%s"),
+			EnemiesToSpawnThisRound,
+			GetCurrentSpawnInterval(),
+			PathSplines.Num(),
+			EnemyClass ? *EnemyClass->GetName() : TEXT("null"));
+
+		// First enemy immediately — do not depend solely on the repeating timer first-fire.
+		SpawnEnemy();
+	}
 
 	if (UWorld* World = GetWorld())
 	{
@@ -1007,6 +1043,154 @@ void ACaveboundGameMode::RegisterEnemyDefeated()
 	if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound && EnemiesAliveThisRound <= 0)
 	{
 		RequestEndRound();
+	}
+}
+
+void ACaveboundGameMode::RegisterExtraEnemyAlive()
+{
+	++EnemiesAliveThisRound;
+	UE_LOG(LogTemp, Log, TEXT("RegisterExtraEnemyAlive: alive=%d"), EnemiesAliveThisRound);
+}
+
+bool ACaveboundGameMode::IsBossRound() const
+{
+	// RoundIndex is 0-based during combat; rounds 3, 6, 9… → (RoundIndex + 1) % 3 == 0
+	return ((RoundIndex + 1) % 3) == 0;
+}
+
+void ACaveboundGameMode::PickNextBossModifier()
+{
+	static const ECaveboundBossModifierType Pool[] = {
+		ECaveboundBossModifierType::SplitOnDeath,
+		ECaveboundBossModifierType::RangeBoost,
+		ECaveboundBossModifierType::EnrageTowerRush,
+		ECaveboundBossModifierType::PoisonAttack,
+		ECaveboundBossModifierType::VisualMutation,
+	};
+
+	TArray<ECaveboundBossModifierType> Available;
+	for (ECaveboundBossModifierType Candidate : Pool)
+	{
+		if (!StackedBossModifiers.Contains(Candidate))
+		{
+			Available.Add(Candidate);
+		}
+	}
+
+	if (Available.Num() == 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("PickNextBossModifier: pool exhausted — keeping %d stacked mods"), StackedBossModifiers.Num());
+		return;
+	}
+
+	const int32 Pick = FMath::RandRange(0, Available.Num() - 1);
+	const ECaveboundBossModifierType Chosen = Available[Pick];
+	StackedBossModifiers.Add(Chosen);
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("PickNextBossModifier: added %s (stack size %d)"),
+		CaveboundBossModifierTypeName(Chosen),
+		StackedBossModifiers.Num());
+}
+
+void ACaveboundGameMode::SpawnBossEnemy()
+{
+	if (bGameOver || RoundState != ECaveboundRoundState::Combat)
+	{
+		return;
+	}
+
+	if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	EnsureTree();
+	CollectPathSplines();
+
+	USplineComponent* ChosenSpline = nullptr;
+	const int32 PathCount = PathSplines.Num();
+	for (int32 Attempt = 0; Attempt < PathCount; ++Attempt)
+	{
+		USplineComponent* Candidate = PathSplines[(NextPathIndex + Attempt) % PathCount].Get();
+		if (!Candidate || !IsValid(Candidate) || Candidate->GetNumberOfSplinePoints() < 2)
+		{
+			continue;
+		}
+
+		Candidate->UpdateSpline();
+		ChosenSpline = Candidate;
+		NextPathIndex = (NextPathIndex + Attempt + 1) % PathCount;
+		break;
+	}
+
+	FVector SpawnLoc = FVector::ZeroVector;
+	if (ChosenSpline)
+	{
+		ChosenSpline->UpdateSpline();
+		const float SplineLength = ChosenSpline->GetSplineLength();
+		const FVector StartLoc =
+			ChosenSpline->GetLocationAtDistanceAlongSpline(0.f, ESplineCoordinateSpace::World);
+		const FVector EndLoc =
+			ChosenSpline->GetLocationAtDistanceAlongSpline(SplineLength, ESplineCoordinateSpace::World);
+		const FVector Anchor = Tree ? Tree->GetActorLocation() : FVector::ZeroVector;
+		const bool bStartIsOuter =
+			FVector::DistSquared2D(StartLoc, Anchor) >= FVector::DistSquared2D(EndLoc, Anchor);
+		SpawnLoc = bStartIsOuter ? StartLoc : EndLoc;
+	}
+	else if (Tree)
+	{
+		SpawnLoc = Tree->GetActorLocation() + FVector(900.f, 0.f, 50.f);
+		UE_LOG(LogTemp, Warning, TEXT("SpawnBossEnemy: no path spline — spawning near tree"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnBossEnemy skipped: no spline and no tree"));
+		return;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.Owner = this;
+
+	ACaveboundBossEnemy* Boss = World->SpawnActor<ACaveboundBossEnemy>(
+		ACaveboundBossEnemy::StaticClass(),
+		SpawnLoc,
+		FRotator::ZeroRotator,
+		SpawnParams);
+	if (!Boss)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnBossEnemy: SpawnActor failed"));
+		return;
+	}
+
+	Boss->ConfigureSpawn(BossSpawnCount, StackedBossModifiers, false);
+	Boss->InitAlongPath(ChosenSpline, Tree, 0.f);
+
+	++EnemiesSpawnedThisRound;
+	++EnemiesAliveThisRound;
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("SpawnBossEnemy: #%d at %s (%d/%d alive=%d)"),
+		BossSpawnCount,
+		*Boss->GetActorLocation().ToCompactString(),
+		EnemiesSpawnedThisRound,
+		EnemiesToSpawnThisRound,
+		EnemiesAliveThisRound);
+
+	if (EnemiesSpawnedThisRound >= EnemiesToSpawnThisRound)
+	{
+		World->GetTimerManager().ClearTimer(EnemySpawnTimer);
 	}
 }
 

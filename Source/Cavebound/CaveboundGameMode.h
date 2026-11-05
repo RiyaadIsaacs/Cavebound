@@ -3,10 +3,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "CaveboundBaseEnemy.h"
+#include "CaveboundBossModifier.h"
 #include "CaveboundTree.h"
 #include "CaveboundGameMode.generated.h"
 
 class USplineComponent;
+class ACaveboundBossEnemy;
 
 // enums for the round's state
 UENUM(BlueprintType)
@@ -111,6 +113,9 @@ public:
 
 	void RegisterEnemyDefeated();
 
+	/** Split minions / extra live enemies that were not part of the spawn timer budget. */
+	void RegisterExtraEnemyAlive();
+
 	// Watch this spot so a build pad that appears on the corpse can be removed.
 	void NoteEnemyDiedHere(const FVector& Spot);
 
@@ -146,6 +151,7 @@ protected:
 	void CollectPathSplines();
 	// Spawn one enemy on the next path, cycling 1 - 2 - 3
 	void SpawnEnemy();
+	void SpawnBossEnemy();
 	void BeginCombatPhase();
 	void EndRound();
 	void RequestEndRound();
@@ -159,6 +165,9 @@ protected:
 	TSubclassOf<ACaveboundBaseEnemy> PickEnemyClassForSpawn() const;
 	float GetCurrentSpawnInterval() const;
 	bool IsSpawnPointClear(const FVector& SpawnPoint) const;
+
+	bool IsBossRound() const;
+	void PickNextBossModifier();
 
 	// Cells added to GridSizeX/Y each cleared wave.
 	UPROPERTY(EditAnywhere, Category = "BuildSlots")
@@ -268,6 +277,14 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Difficulty")
 	int32 RoundIndex = 0;
+
+	// How many times the stacking boss has appeared this run (1-based when used for scaling).
+	UPROPERTY(VisibleAnywhere, Category = "Boss")
+	int32 BossSpawnCount = 0;
+
+	// Persistent modifier stack for the boss across the whole match. 
+	UPROPERTY(VisibleAnywhere, Category = "Boss")
+	TArray<ECaveboundBossModifierType> StackedBossModifiers;
 
 	int32 EnemiesSpawnedThisRound = 0;
 	int32 EnemiesAliveThisRound = 0;
