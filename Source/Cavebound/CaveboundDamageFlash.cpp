@@ -1,4 +1,5 @@
 #include "CaveboundDamageFlash.h"
+#include "CaveboundModelOutline.h"
 #include "Components/MeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
@@ -40,10 +41,7 @@ void FCaveboundDamageFlash::ClearFlash(const TArray<UStaticMeshComponent*>& Mesh
 {
 	for (UStaticMeshComponent* Mesh : Meshes)
 	{
-		if (IsValid(Mesh))
-		{
-			Mesh->SetOverlayMaterial(nullptr);
-		}
+		CaveboundModelOutline::RestoreMesh(Mesh);
 	}
 }
 
@@ -86,10 +84,7 @@ void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStat
 	{
 		for (UStaticMeshComponent* Mesh : MeshesCopy)
 		{
-			if (IsValid(Mesh))
-			{
-				Mesh->SetOverlayMaterial(nullptr);
-			}
+			CaveboundModelOutline::RestoreMesh(Mesh);
 		}
 	});
 
@@ -124,10 +119,7 @@ void FCaveboundDamageFlash::FlashComponent(UObject* WorldContext, UMeshComponent
 	FTimerDelegate clearFlashLater;
 	clearFlashLater.BindWeakLambda(ownerActor, [meshToFlash]()
 	{
-		if (UMeshComponent* hitMesh = meshToFlash.Get())
-		{
-			hitMesh->SetOverlayMaterial(nullptr);
-		}
+		CaveboundModelOutline::RestoreMesh(meshToFlash.Get());
 	});
 
 	world->GetTimerManager().SetTimer(TimerHandle, clearFlashLater, Duration, false);

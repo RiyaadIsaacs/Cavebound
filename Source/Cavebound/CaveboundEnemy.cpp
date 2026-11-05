@@ -2,6 +2,7 @@
 #include "CaveboundDamageFlash.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundMinionAnimInstance.h"
+#include "CaveboundModelOutline.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
@@ -232,6 +233,7 @@ void ACaveboundEnemy::BeginPlay()
 {
 	Super::BeginPlay();
 	EnsureAnimationAssets();
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 void ACaveboundEnemy::Tick(float DeltaTime)

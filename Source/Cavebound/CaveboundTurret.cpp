@@ -2,6 +2,7 @@
 #include "CaveboundArrow.h"
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundModelOutline.h"
 #include "CaveboundShaderMaterials.h"
 #include "Components/ArrowComponent.h"
 #include "Components/PrimitiveComponent.h"
@@ -87,6 +88,7 @@ void ACaveboundTurret::ApplyUpgradeMesh()
 	{
 		EnsureDamageVisualMaterial();
 		UpdateDamageVisuals();
+		CaveboundModelOutline::ApplyToActor(this);
 	}
 }
 
@@ -322,6 +324,7 @@ void ACaveboundTurret::BeginPlay()
 	RememberFirePoint();
 	EnsureDamageVisualMaterial();
 	UpdateDamageVisuals();
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 void ACaveboundTurret::Tick(float DeltaTime)

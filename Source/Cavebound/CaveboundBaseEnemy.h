@@ -24,6 +24,7 @@ class CAVEBOUND_API ACaveboundBaseEnemy : public AActor, public ICaveboundHoverH
 public:
 	ACaveboundBaseEnemy();
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
 	// ICaveboundHoverHealth interface for the HUD to show HP on mouse hover

@@ -4,6 +4,7 @@
 #include "CaveboundEnemy.h"
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundLongRangeEnemy.h"
+#include "CaveboundModelOutline.h"
 #include "CaveboundPlayerController.h"
 #include "CaveboundRockDeposit.h"
 #include "CaveboundRockField.h"
@@ -57,8 +58,13 @@ void ACaveboundGameMode::StartPlay()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().SetTimerForNextTick(this, &ACaveboundGameMode::EnsurePlayerSpawnClearOfTree);
+		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda([World]()
+		{
+			CaveboundModelOutline::EnsureWorld(World);
+		}));
 	}
 	EnsurePlayerSpawnClearOfTree();
+	CaveboundModelOutline::EnsureWorld(GetWorld());
 
 	UE_LOG(
 		LogTemp,

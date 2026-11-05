@@ -1,6 +1,7 @@
 #include "CaveboundTree.h"
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundModelOutline.h"
 #include "CaveboundPlayerController.h"
 #include "CaveboundSoftVFX.h"
 #include "CaveboundTreeProjectile.h"
@@ -106,6 +107,8 @@ void ACaveboundTree::BeginPlay()
 			FVector(0.f, 0.f, EmberHeight),
 			FLinearColor(0.18f, 0.42f, 0.12f, 1.f));
 	}
+
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 float ACaveboundTree::GetCanopyHeight() const

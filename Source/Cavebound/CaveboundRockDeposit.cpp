@@ -2,6 +2,7 @@
 
 #include "CaveboundGameMode.h"
 #include "CaveboundHarvestBar.h"
+#include "CaveboundModelOutline.h"
 #include "CaveboundPlayerController.h"
 #include "CaveboundSoftVFX.h"
 #include "Kismet/GameplayStatics.h"
@@ -72,6 +73,7 @@ void ACaveboundRockDeposit::BeginPlay()
 	}
 
 	RollYield();
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 void ACaveboundRockDeposit::RollYield()

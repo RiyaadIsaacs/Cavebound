@@ -1,4 +1,5 @@
 #include "CaveboundPlaceBeamVFX.h"
+#include "CaveboundModelOutline.h"
 #include "CaveboundTurret.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -278,7 +279,7 @@ void ACaveboundPlaceBeamVFX::ClearReveal()
 			continue;
 		}
 
-		Mesh->SetOverlayMaterial(nullptr);
+		CaveboundModelOutline::RestoreMesh(Mesh);
 		if (MeshScales.IsValidIndex(i))
 		{
 			Mesh->SetRelativeScale3D(MeshScales[i]);

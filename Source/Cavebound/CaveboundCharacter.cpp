@@ -1,5 +1,6 @@
 #include "CaveboundCharacter.h"
 #include "CaveboundGameMode.h"
+#include "CaveboundModelOutline.h"
 #include "CaveboundMoveMarker.h"
 #include "CaveboundPlayerController.h"
 #include "CaveboundRockDeposit.h"
@@ -163,6 +164,7 @@ void ACaveboundCharacter::BeginPlay()
 		Body->PlayAnimation(LocomotionBlend, true);
 	}
 	UpdateLocomotion(0.f);
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 // Rotate the camera boom based on mouse movement while right clicking

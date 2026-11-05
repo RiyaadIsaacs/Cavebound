@@ -6,6 +6,7 @@
 #include "CaveboundGameMode.h"
 #include "CaveboundDamageVignette.h"
 #include "CaveboundHoverHealth.h"
+#include "CaveboundModelOutline.h"
 #include "CaveboundHoverInfo.h"
 #include "CaveboundPlaceBeamVFX.h"
 #include "CaveboundResourceReadout.h"
@@ -1020,17 +1021,7 @@ void ACaveboundPlayerController::ClearHoverGlow()
 		return;
 	}
 
-	TArray<UMeshComponent*> Meshes;
-	Prev->GetComponents<UMeshComponent>(Meshes);
-	for (UMeshComponent* Mesh : Meshes)
-	{
-		if (IsValid(Mesh))
-		{
-			Mesh->SetOverlayMaterial(nullptr);
-		}
-	}
-
-	// Nearby empty slots keep their soft white pad highlight.
+	// Nearby empty slots keep their soft white pad highlight; otherwise restore outline.
 	const bool bStillNearby = HighlightedSlots.ContainsByPredicate(
 		[Prev](const TWeakObjectPtr<AActor>& Existing)
 		{
@@ -1039,6 +1030,10 @@ void ACaveboundPlayerController::ClearHoverGlow()
 	if (bStillNearby)
 	{
 		SetSlotHighlighted(Prev, true);
+	}
+	else
+	{
+		CaveboundModelOutline::RestoreActor(Prev);
 	}
 }
 
@@ -1819,9 +1814,17 @@ void ACaveboundPlayerController::SetSlotHighlighted(AActor* Slot, bool bHighligh
 	Slot->GetComponents<UStaticMeshComponent>(Meshes);
 	for (UStaticMeshComponent* Mesh : Meshes)
 	{
-		if (Mesh)
+		if (!Mesh)
 		{
-			Mesh->SetOverlayMaterial(bHighlighted ? SlotHighlightMaterial.Get() : nullptr);
+			continue;
+		}
+		if (bHighlighted)
+		{
+			Mesh->SetOverlayMaterial(SlotHighlightMaterial.Get());
+		}
+		else
+		{
+			CaveboundModelOutline::RestoreMesh(Mesh);
 		}
 	}
 }

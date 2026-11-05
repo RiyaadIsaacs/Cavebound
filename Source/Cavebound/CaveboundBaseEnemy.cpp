@@ -1,4 +1,5 @@
 #include "CaveboundBaseEnemy.h"
+#include "CaveboundModelOutline.h"
 #include "CaveboundSoftVFX.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundSnare.h"
@@ -28,6 +29,12 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 	VisualMesh->SetGenerateOverlapEvents(true);
 
 	Health = MaxHealth;
+}
+
+void ACaveboundBaseEnemy::BeginPlay()
+{
+	Super::BeginPlay();
+	CaveboundModelOutline::ApplyToActor(this);
 }
 
 // Initialize the enemy to walk along a spline 

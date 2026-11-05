@@ -22,14 +22,18 @@
 
 namespace
 {
-	constexpr const TCHAR* VignettePackage = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundScreenFXV3");
-	constexpr const TCHAR* VignettePath = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundScreenFXV3.PP_CaveboundScreenFXV3");
+	constexpr const TCHAR* VignettePackage = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundScreenFXV4");
+	constexpr const TCHAR* VignettePath = TEXT("/Game/Assets/Materials/PostFX/PP_CaveboundScreenFXV4.PP_CaveboundScreenFXV4");
 	constexpr const TCHAR* VolumeTag = TEXT("CaveboundDamageVignette");
 	constexpr const TCHAR* StrengthParamName = TEXT("Strength");
 	constexpr const TCHAR* DarkenParamName = TEXT("Darken");
 	constexpr const TCHAR* TintParamName = TEXT("Tint");
+	constexpr const TCHAR* SaturationParamName = TEXT("Saturation");
+	constexpr const TCHAR* ColorBoostParamName = TEXT("ColorBoost");
 
 	constexpr float MaxTreeDarken = 0.5f;
+	constexpr float DefaultSaturation = 1.35f;
+	constexpr float DefaultColorBoost = 1.1f;
 
 #if WITH_EDITORONLY_DATA
 	UMaterial* BuildVignetteMaterial(UObject* Outer, FName AssetName)
@@ -68,11 +72,26 @@ namespace
 		TintParam->DefaultValue = FLinearColor(0.75f, 0.05f, 0.05f, 1.f);
 		EditorData->ExpressionCollection.AddExpression(TintParam);
 
+		UMaterialExpressionScalarParameter* SaturationParam = NewObject<UMaterialExpressionScalarParameter>(Material);
+		SaturationParam->ParameterName = SaturationParamName;
+		SaturationParam->DefaultValue = DefaultSaturation;
+		EditorData->ExpressionCollection.AddExpression(SaturationParam);
+
+		UMaterialExpressionScalarParameter* ColorBoostParam = NewObject<UMaterialExpressionScalarParameter>(Material);
+		ColorBoostParam->ParameterName = ColorBoostParamName;
+		ColorBoostParam->DefaultValue = DefaultColorBoost;
+		EditorData->ExpressionCollection.AddExpression(ColorBoostParam);
+
 		UMaterialExpressionCustom* Custom = NewObject<UMaterialExpressionCustom>(Material);
-		Custom->Description = TEXT("CaveboundScreenFXV3");
+		Custom->Description = TEXT("CaveboundScreenFXV4");
 		Custom->OutputType = CMOT_Float3;
 		Custom->Code = TEXT(
 			"float3 SceneColor = SceneColorRef.rgb;\n"
+			"float Sat = max(Saturation, 0.0);\n"
+			"float Gain = max(ColorBoost, 0.0);\n"
+			"float Luma = dot(SceneColor, float3(0.2126, 0.7152, 0.0722));\n"
+			"SceneColor = lerp(Luma.xxx, SceneColor, Sat);\n"
+			"SceneColor *= Gain;\n"
 			"float Dark = saturate(Darken);\n"
 			"SceneColor *= (1.0 - Dark);\n"
 			"float Amt = saturate(Strength);\n"
@@ -114,6 +133,16 @@ namespace
 			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
 			In.InputName = TEXT("Tint");
 			TintParam->ConnectExpression(&In.Input, 0);
+		}
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("Saturation");
+			SaturationParam->ConnectExpression(&In.Input, 0);
+		}
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("ColorBoost");
+			ColorBoostParam->ConnectExpression(&In.Input, 0);
 		}
 
 		Custom->ConnectExpression(&EditorData->EmissiveColor, 0);
@@ -165,12 +194,12 @@ UMaterialInterface* UCaveboundDamageVignette::GetOrBuildMaterial()
 #if WITH_EDITOR
 	UPackage* Package = CreatePackage(VignettePackage);
 	Package->FullyLoad();
-	UMaterial* AssetMaterial = BuildVignetteMaterial(Package, TEXT("PP_CaveboundScreenFXV3"));
+	UMaterial* AssetMaterial = BuildVignetteMaterial(Package, TEXT("PP_CaveboundScreenFXV4"));
 	TrySaveMaterialAsset(AssetMaterial, VignettePackage);
 	TransientCache = AssetMaterial;
 	return AssetMaterial;
 #else
-	UMaterial* RuntimeMaterial = BuildVignetteMaterial(GetTransientPackage(), TEXT("PP_CaveboundScreenFXV3"));
+	UMaterial* RuntimeMaterial = BuildVignetteMaterial(GetTransientPackage(), TEXT("PP_CaveboundScreenFXV4"));
 	TransientCache = RuntimeMaterial;
 	return RuntimeMaterial;
 #endif
@@ -240,6 +269,8 @@ void UCaveboundDamageVignette::Ensure(UWorld* World)
 			VignetteMID = UMaterialInstanceDynamic::Create(Base, this);
 			if (VignetteMID)
 			{
+				VignetteMID->SetScalarParameterValue(SaturationParamName, DefaultSaturation);
+				VignetteMID->SetScalarParameterValue(ColorBoostParamName, DefaultColorBoost);
 				ApplyVignetteParams(0.f);
 				ApplyDarken();
 			}
