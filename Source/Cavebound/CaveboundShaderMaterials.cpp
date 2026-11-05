@@ -236,6 +236,12 @@ namespace CaveboundShaderMaterials
 		Offset->B.Connect(0, WaveByMax);
 		Offset->ConnectExpression(&EditorData->WorldPositionOffset, 0);
 
+		// Colour tint is driven separately so it can wait until ~50% HP.
+		UMaterialExpressionScalarParameter* ColourDamageAmount = NewObject<UMaterialExpressionScalarParameter>(Material);
+		ColourDamageAmount->ParameterName = TEXT("ColourDamageAmount");
+		ColourDamageAmount->DefaultValue = 0.f;
+		EditorData->ExpressionCollection.AddExpression(ColourDamageAmount);
+
 		UMaterialExpressionVectorParameter* HealthyColour = NewObject<UMaterialExpressionVectorParameter>(Material);
 		HealthyColour->ParameterName = TEXT("HealthyColour");
 		HealthyColour->DefaultValue = FLinearColor(0.55f, 0.5f, 0.42f, 1.f);
@@ -256,7 +262,7 @@ namespace CaveboundShaderMaterials
 			EditorData->ExpressionCollection.AddExpression(TexTint);
 			TexTint->A.Connect(0, TexSample);
 			TexTint->B.Connect(0, DamagedColour);
-			TexTint->Alpha.Connect(0, DamageAmount);
+			TexTint->Alpha.Connect(0, ColourDamageAmount);
 			TexTint->ConnectExpression(&EditorData->BaseColor, 0);
 		}
 		else
@@ -265,7 +271,7 @@ namespace CaveboundShaderMaterials
 			EditorData->ExpressionCollection.AddExpression(ColourLerp);
 			ColourLerp->A.Connect(0, HealthyColour);
 			ColourLerp->B.Connect(0, DamagedColour);
-			ColourLerp->Alpha.Connect(0, DamageAmount);
+			ColourLerp->Alpha.Connect(0, ColourDamageAmount);
 			ColourLerp->ConnectExpression(&EditorData->BaseColor, 0);
 		}
 

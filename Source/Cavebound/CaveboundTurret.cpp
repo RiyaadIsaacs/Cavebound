@@ -133,8 +133,15 @@ void ACaveboundTurret::UpdateDamageVisuals()
 	const float HealthRatio = (MaxHealth > KINDA_SMALL_NUMBER)
 		? FMath::Clamp(Health / MaxHealth, 0.f, 1.f)
 		: 0.f;
+	// Full missing-health curve drives vertex displacement.
 	const float DamageAmount = 1.f - HealthRatio;
 	DamageVisualMaterial->SetScalarParameterValue(TEXT("DamageAmount"), DamageAmount);
+
+	// Base colour tint only starts once health drops to 50% or below.
+	const float ColourDamageAmount = (HealthRatio >= 0.5f)
+		? 0.f
+		: FMath::Clamp((0.5f - HealthRatio) / 0.5f, 0.f, 1.f);
+	DamageVisualMaterial->SetScalarParameterValue(TEXT("ColourDamageAmount"), ColourDamageAmount);
 }
 
 int32 ACaveboundTurret::GetNextUpgradeRockCost() const
