@@ -14,17 +14,30 @@ ACaveboundSnare::ACaveboundSnare()
 {
 	bAutoFire = false;
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> cylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	// Match every other defender: fortress tower mesh + shared scale/pivot.
+	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
+	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
+	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
+
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level1Mesh(
+		TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL1.SM_ArcherTower_LVL1"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level2Mesh(
+		TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL2.SM_ArcherTower_LVL2"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> level3Mesh(
+		TEXT("/Game/Assets/Models/Towers/SM_ArcherTower_LVL3.SM_ArcherTower_LVL3"));
+	UseTowerMeshes(
+		level1Mesh.Succeeded() ? level1Mesh.Object : nullptr,
+		level2Mesh.Succeeded() ? level2Mesh.Object : nullptr,
+		level3Mesh.Succeeded() ? level3Mesh.Object : nullptr,
+		level1Mesh.Succeeded() ? level1Mesh.Object : nullptr);
+
+	// Cylinder is only the thin rope spline mesh — never the tower visual.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> cylinderMesh(
+		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	if (cylinderMesh.Succeeded())
 	{
-		VisualMesh->SetStaticMesh(cylinderMesh.Object);
 		RopeMesh = cylinderMesh.Object;
 	}
-
-	// Mesh dimensions
-	const float postRadius = 28.f;
-	VisualMesh->SetRelativeScale3D(FVector(postRadius / 50.f, postRadius / 50.f, PostHeight / 100.f));
-	VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, PostHeight * 0.5f));
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ropeColorMaterial(
 		TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
@@ -37,9 +50,30 @@ ACaveboundSnare::ACaveboundSnare()
 		}
 	}
 
+	// Rope attaches near the top of the scaled tower (same ballpark as other fire points).
+	PostHeight = 220.f;
+
 	Cost = 70;
 	MaxHealth = 100.f;
 	Health = MaxHealth;
+}
+
+void ACaveboundSnare::BeginPlay()
+{
+	Super::BeginPlay();
+	AlignDefenderTransform();
+}
+
+void ACaveboundSnare::AlignDefenderTransform()
+{
+	if (!VisualMesh)
+	{
+		return;
+	}
+
+	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
+	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
+	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
 }
 
 void ACaveboundSnare::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -84,15 +118,7 @@ void ACaveboundSnare::ReleaseEnemy(ACaveboundBaseEnemy* Enemy)
 void ACaveboundSnare::ApplyLevelBonus()
 {
 	Super::ApplyLevelBonus();
-
-	const float levelScale = 1.f + UpgradeLevel * 0.2f;
-	const float postRadius = 28.f * levelScale;
-	PostHeight = 700.f * levelScale;
-	if (VisualMesh)
-	{
-		VisualMesh->SetRelativeScale3D(FVector(postRadius / 50.f, postRadius / 50.f, PostHeight / 100.f));
-		VisualMesh->SetRelativeLocation(FVector(0.f, 0.f, PostHeight * 0.5f));
-	}
+	AlignDefenderTransform();
 }
 
 void ACaveboundSnare::Tick(float DeltaTime)

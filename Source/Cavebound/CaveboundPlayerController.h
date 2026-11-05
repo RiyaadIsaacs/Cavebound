@@ -14,6 +14,7 @@ class UCaveboundBuildMenu;
 class UCaveboundBuildPrompt;
 class UCaveboundDefenderMenu;
 class UCaveboundHoverInfo;
+class UCaveboundEmptyCursor;
 class UCaveboundDamageVignette;
 class UCaveboundResourceReadout;
 class UMaterialInterface;
@@ -126,6 +127,7 @@ protected:
 	void ClearHoverGlow();
 	void ApplyHoverGlow(AActor* Actor, const FLinearColor& Color);
 	FLinearColor GetHoverGlowColor(const AActor* Actor) const;
+	void SetHoverInfoAsCursor(bool bActive);
 	bool IsBuildSlotActor(const AActor* Actor) const;
 	bool IsPointerOverInteractiveUI() const;
 	bool IsMouseButtonHeld(const FKey& Button) const;
@@ -219,6 +221,11 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundHoverInfo> HoverInfo;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundEmptyCursor> EmptyCursor;
+
+	bool bHoverInfoAsCursor = false;
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundDamageVignette> DamageVignette;

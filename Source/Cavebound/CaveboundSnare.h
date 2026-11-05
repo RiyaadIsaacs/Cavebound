@@ -36,6 +36,7 @@ public:
 
 	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Snare")); }
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -55,12 +56,14 @@ protected:
 	int32 GetCatchLimit() const { return 1 + UpgradeLevel; }
 
 	virtual void ApplyLevelBonus() override;
+	void AlignDefenderTransform();
 
 	// Held enemies and the rope wrapped around each one.
 	UPROPERTY()
 	TArray<FCaveboundSnareHold> Holds;
 
-	float PostHeight = 700.f;
+	// World-Z offset from actor origin to rope attach (matches other defender tops).
+	float PostHeight = 220.f;
 
 	// The path the rope follows.
 	UPROPERTY()

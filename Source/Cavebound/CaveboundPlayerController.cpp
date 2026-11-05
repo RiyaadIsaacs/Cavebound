@@ -7,6 +7,7 @@
 #include "CaveboundDamageVignette.h"
 #include "CaveboundHoverHealth.h"
 #include "CaveboundModelOutline.h"
+#include "CaveboundEmptyCursor.h"
 #include "CaveboundHoverInfo.h"
 #include "CaveboundPlaceBeamVFX.h"
 #include "CaveboundResourceReadout.h"
@@ -126,8 +127,25 @@ void ACaveboundPlayerController::ShowHUD()
 		HoverInfo = CreateWidget<UCaveboundHoverInfo>(this, UCaveboundHoverInfo::StaticClass());
 		if (HoverInfo)
 		{
-			HoverInfo->AddToViewport(5);
+			HoverInfo->AddToViewport(100);
 		}
+	}
+	if (!EmptyCursor)
+	{
+		EmptyCursor = CreateWidget<UCaveboundEmptyCursor>(this, UCaveboundEmptyCursor::StaticClass());
+	}
+	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+	{
+		// Required on desktop or Custom/software cursors never replace the OS arrow.
+		Viewport->SetUseSoftwareCursorWidgets(true);
+		if (EmptyCursor)
+		{
+			Viewport->SetSoftwareCursorWidget(EMouseCursor::Custom, EmptyCursor);
+		}
+	}
+	if (EmptyCursor)
+	{
+		SetMouseCursorWidget(EMouseCursor::Custom, EmptyCursor);
 	}
 
 	EnsureDamageVignette();
@@ -623,6 +641,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 			HoverInfo->HideInfo();
 		}
 		ClearHoverGlow();
+		SetHoverInfoAsCursor(false);
 		bLeftMouseWasDown = IsMouseButtonHeld(EKeys::LeftMouseButton);
 		bRightMouseWasDown = IsMouseButtonHeld(EKeys::RightMouseButton);
 		return;
@@ -1347,22 +1366,65 @@ void ACaveboundPlayerController::UpdateHoverInfoWidget()
 	if (!HasHoveredHealthTarget())
 	{
 		HoverInfo->HideInfo();
+		SetHoverInfoAsCursor(false);
 		return;
 	}
 
-	float MouseX = 0.f;
-	float MouseY = 0.f;
-	if (!GetMousePosition(MouseX, MouseY))
-	{
-		HoverInfo->HideInfo();
-		return;
-	}
-
+	// Viewport slate space — raw GetMousePosition() is pixels and leaves the card offset.
+	const FVector2D Mouse = UWidgetLayoutLibrary::GetMousePositionOnViewport(this);
 	HoverInfo->ShowAt(
-		FVector2D(MouseX, MouseY),
+		Mouse,
 		GetHoveredDisplayName(),
 		GetHoveredHealth(),
 		GetHoveredMaxHealth());
+	SetHoverInfoAsCursor(true);
+}
+
+void ACaveboundPlayerController::SetHoverInfoAsCursor(bool bActive)
+{
+	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+	{
+		Viewport->SetUseSoftwareCursorWidgets(true);
+	}
+
+	auto SetPlatformCursorVisible = [](bool bVisible)
+	{
+		if (!FSlateApplication::IsInitialized())
+		{
+			return;
+		}
+		if (TSharedPtr<ICursor> PlatformCursor = FSlateApplication::Get().GetPlatformCursor())
+		{
+			PlatformCursor->Show(bVisible);
+		}
+	};
+
+	if (bActive)
+	{
+		if (!EmptyCursor)
+		{
+			EmptyCursor = CreateWidget<UCaveboundEmptyCursor>(this, UCaveboundEmptyCursor::StaticClass());
+		}
+		if (EmptyCursor)
+		{
+			SetMouseCursorWidget(EMouseCursor::Custom, EmptyCursor);
+			if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+			{
+				Viewport->SetSoftwareCursorWidget(EMouseCursor::Custom, EmptyCursor);
+			}
+		}
+		CurrentMouseCursor = EMouseCursor::Custom;
+		bShowMouseCursor = false;
+		SetPlatformCursorVisible(false);
+		bHoverInfoAsCursor = true;
+	}
+	else if (bHoverInfoAsCursor)
+	{
+		bHoverInfoAsCursor = false;
+		CurrentMouseCursor = EMouseCursor::Default;
+		bShowMouseCursor = true;
+		SetPlatformCursorVisible(true);
+	}
 }
 
 bool ACaveboundPlayerController::HasHoveredHealthTarget() const

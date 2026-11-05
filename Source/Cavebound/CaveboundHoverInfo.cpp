@@ -9,6 +9,8 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 
 void UCaveboundHoverInfo::NativeOnInitialized()
 {
@@ -66,15 +68,16 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 	HealthText->SetFont(CaveboundUIStyle::Font(13));
 	Body->AddChildToVerticalBox(HealthText);
 
-	USizeBox* CardSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("HoverCardSize"));
-	CardSize->SetMinDesiredWidth(200.f);
-	CardSize->SetContent(Frame);
+	USizeBox* CardSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("HoverCardSize"));
+	CardSizeBox->SetMinDesiredWidth(200.f);
+	CardSizeBox->SetContent(Frame);
 
-	PanelSlot = Canvas->AddChildToCanvas(CardSize);
+	PanelSlot = Canvas->AddChildToCanvas(CardSizeBox);
 	if (PanelSlot)
 	{
 		PanelSlot->SetAnchors(FAnchors(0.f, 0.f));
-		PanelSlot->SetAlignment(FVector2D(0.f, 1.f));
+		// Top-left of the card = mouse hotspot (same place the OS cursor tip would be).
+		PanelSlot->SetAlignment(FVector2D(0.f, 0.f));
 		PanelSlot->SetAutoSize(true);
 	}
 }
@@ -99,12 +102,49 @@ void UCaveboundHoverInfo::ShowAt(const FVector2D& ScreenPosition, const FText& N
 	{
 		HealthBar->SetPercent(Clamped / MaxHP);
 	}
-	if (PanelSlot)
+
+	SetVisibility(ESlateVisibility::HitTestInvisible);
+
+	FVector2D CardSize(200.f, 78.f);
+	if (Frame)
 	{
-		PanelSlot->SetPosition(ScreenPosition + FVector2D(18.f, -12.f));
+		Frame->ForceLayoutPrepass();
+		const FVector2D Desired = Frame->GetDesiredSize();
+		if (Desired.X > 1.f && Desired.Y > 1.f)
+		{
+			CardSize = Desired;
+		}
 	}
 
-	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	// ScreenPosition is already viewport-local (GetMousePositionOnViewport). Prefer the
+	// widget's own geometry size so clamping matches the canvas the card lives on.
+	FVector2D ViewportSize = GetCachedGeometry().GetLocalSize();
+	if (ViewportSize.X < 1.f || ViewportSize.Y < 1.f)
+	{
+		ViewportSize = FVector2D(1920.f, 1080.f);
+		if (GEngine && GEngine->GameViewport)
+		{
+			GEngine->GameViewport->GetViewportSize(ViewportSize);
+		}
+	}
+
+	FVector2D Pos = ScreenPosition;
+	if (Pos.X + CardSize.X > ViewportSize.X - 4.f)
+	{
+		Pos.X = ScreenPosition.X - CardSize.X;
+	}
+	if (Pos.Y + CardSize.Y > ViewportSize.Y - 4.f)
+	{
+		Pos.Y = ScreenPosition.Y - CardSize.Y;
+	}
+
+	Pos.X = FMath::Clamp(Pos.X, 4.f, FMath::Max(4.f, ViewportSize.X - CardSize.X - 4.f));
+	Pos.Y = FMath::Clamp(Pos.Y, 4.f, FMath::Max(4.f, ViewportSize.Y - CardSize.Y - 4.f));
+
+	if (PanelSlot)
+	{
+		PanelSlot->SetPosition(Pos);
+	}
 }
 
 void UCaveboundHoverInfo::HideInfo()

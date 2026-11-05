@@ -9,7 +9,7 @@ class UCanvasPanelSlot;
 class UProgressBar;
 class UTextBlock;
 
-/** Name + HP bar that follows the cursor when hovering a health target. */
+/** Name + HP card that follows the mouse and acts as the gameplay cursor while hovering. */
 UCLASS()
 class CAVEBOUND_API UCaveboundHoverInfo : public UUserWidget
 {
