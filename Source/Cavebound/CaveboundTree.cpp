@@ -3,7 +3,7 @@
 #include "CaveboundGameMode.h"
 #include "CaveboundModelOutline.h"
 #include "CaveboundPlayerController.h"
-#include "CaveboundSoftVFX.h"
+#include "CaveboundVFX.h"
 #include "CaveboundTreeProjectile.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"

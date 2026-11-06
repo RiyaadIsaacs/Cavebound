@@ -2,10 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Templates/Function.h"
 #include "CaveboundPlaceBeamVFX.generated.h"
 
 class UNiagaraComponent;
 class UNiagaraSystem;
+class USceneComponent;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 
@@ -27,7 +29,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	/** Yellow — used when first placing a defender. */
+	/** Yellow —used when first placing a defender. */
 	static FLinearColor ColorForBuild();
 
 	/** Cyan for 1st upgrade, red for 2nd. NextUpgradeLevel is the level after upgrade (1 or 2). */

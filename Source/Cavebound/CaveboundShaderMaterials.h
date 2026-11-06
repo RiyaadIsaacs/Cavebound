@@ -13,7 +13,6 @@ class UObject;
  * M_EnragePulse: purple emissive pulse + light WPO for boss enrage
  * M_HoverOutline: translucent unlit fresnel rim for hover outlines
  * M_RockMineDisplace: sink + crumble WPO scaled by MineAmount (0 full .. 1 empty)
- * M_MapEdgeFog: translucent unlit fog that is solid outside the map and fades inward
  */
 namespace CaveboundShaderMaterials
 {
@@ -23,7 +22,6 @@ namespace CaveboundShaderMaterials
 	UMaterialInterface* GetEnragePulseMaterial();
 	UMaterialInterface* GetHoverOutlineMaterial();
 	UMaterialInterface* GetRockMineDisplaceMaterial();
-	UMaterialInterface* GetMapEdgeFogMaterial();
 
 	class UMaterialInstanceDynamic* CreatePoisonPulseMID(UObject* Outer);
 	class UMaterialInstanceDynamic* CreateTowerDamageDisplaceMID(UObject* Outer);
@@ -31,5 +29,4 @@ namespace CaveboundShaderMaterials
 	class UMaterialInstanceDynamic* CreateEnragePulseMID(UObject* Outer);
 	class UMaterialInstanceDynamic* CreateHoverOutlineMID(UObject* Outer);
 	class UMaterialInstanceDynamic* CreateRockMineDisplaceMID(UObject* Outer);
-	class UMaterialInstanceDynamic* CreateMapEdgeFogMID(UObject* Outer);
 }

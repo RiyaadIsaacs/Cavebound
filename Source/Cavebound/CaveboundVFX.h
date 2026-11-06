@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "CaveboundSoftVFX.generated.h"
+#include "CaveboundVFX.generated.h"
 
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;

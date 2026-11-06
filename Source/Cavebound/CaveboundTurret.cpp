@@ -252,17 +252,6 @@ void ACaveboundTurret::ApplyCommittedUpgrade()
 	ApplyLevelBonus();
 }
 
-bool ACaveboundTurret::TryUpgrade(ACaveboundGameMode* GameMode)
-{
-	if (!CommitUpgradePurchase(GameMode))
-	{
-		return false;
-	}
-
-	ApplyCommittedUpgrade();
-	return true;
-}
-
 // spends wood to restore full health
 bool ACaveboundTurret::TryRepair(ACaveboundGameMode* GameMode)
 {

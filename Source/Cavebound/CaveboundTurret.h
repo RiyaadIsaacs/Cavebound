@@ -53,7 +53,6 @@ public:
 	int32 GetNextUpgradeWoodCost() const;
 	int32 GetRepairCost() const;
 	void GetDisarmRefund(int32& OutWood, int32& OutRock) const;
-	bool TryUpgrade(ACaveboundGameMode* GameMode);
 	// Spend upgrade resources now; call ApplyCommittedUpgrade after place/upgrade VFX.
 	bool CommitUpgradePurchase(ACaveboundGameMode* GameMode);
 	void ApplyCommittedUpgrade();

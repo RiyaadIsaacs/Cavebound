@@ -5,7 +5,7 @@
 #include "CaveboundModelOutline.h"
 #include "CaveboundPlayerController.h"
 #include "CaveboundShaderMaterials.h"
-#include "CaveboundSoftVFX.h"
+#include "CaveboundVFX.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -121,7 +121,6 @@ void ACaveboundRockDeposit::UpdateMineVisuals()
 		: 0.f;
 
 	MineVisualMaterial->SetScalarParameterValue(TEXT("MineAmount"), MineAmount);
-	// Kill any leftover V1 wobble params if an old MID somehow sticks around.
 	MineVisualMaterial->SetScalarParameterValue(TEXT("HarvestShake"), 0.f);
 	MineVisualMaterial->SetScalarParameterValue(TEXT("MaxCrumble"), 0.f);
 	MineVisualMaterial->SetScalarParameterValue(TEXT("WobbleSpeed"), 0.f);
@@ -197,7 +196,6 @@ bool ACaveboundRockDeposit::AddHarvestTime(float DeltaTime)
 			PC->PulseRockVignette();
 		}
 
-		// Same hit sparks as enemies, but grey and much bigger.
 		ACaveboundSparkBurst::SpawnAt(
 			World,
 			GetActorLocation() + FVector(0.f, 0.f, 50.f),

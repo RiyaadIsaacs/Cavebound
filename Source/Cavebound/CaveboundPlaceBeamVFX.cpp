@@ -66,7 +66,6 @@ ACaveboundPlaceBeamVFX::ACaveboundPlaceBeamVFX()
 		PopMesh->SetMaterial(0, GlowMat.Object);
 	}
 
-	// Optional Niagara assets — if unset, BeginPlay / StartPop use engine fallbacks.
 }
 
 FLinearColor ACaveboundPlaceBeamVFX::ColorForBuild()
@@ -83,7 +82,7 @@ FLinearColor ACaveboundPlaceBeamVFX::ColorForUpgrade(int32 NextUpgradeLevel)
 	return FLinearColor(0.25f, 0.9f, 1.f, 1.f); // cyan — 1st upgrade
 }
 
-// creates and plays place / upgrade beam at a slot
+// creates and plays place/upgrade beam at a slot
 ACaveboundPlaceBeamVFX* ACaveboundPlaceBeamVFX::SpawnAt(
 	UWorld* World,
 	const FVector& Location,

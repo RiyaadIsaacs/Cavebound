@@ -1,4 +1,4 @@
-﻿#include "CaveboundSoftVFX.h"
+﻿#include "CaveboundVFX.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -7,7 +7,7 @@
 #include "Materials/MaterialInterface.h"
 
 // shared helpers for soft sphere VFX
-namespace SoftVFX
+namespace VFX
 {
 	// caches the engine sphere mesh
 	UStaticMesh* SphereMesh()
@@ -113,12 +113,12 @@ void ACaveboundSparkBurst::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UStaticMesh* Mesh = SoftVFX::SphereMesh();
+	UStaticMesh* Mesh = VFX::SphereMesh();
 	// prefer emissive so grey/colored sparks stay readable
-	UMaterialInterface* BaseMat = SoftVFX::GlowMat();
+	UMaterialInterface* BaseMat = VFX::GlowMat();
 	if (!BaseMat)
 	{
-		BaseMat = SoftVFX::SoftMat();
+		BaseMat = VFX::SoftMat();
 	}
 	if (!Mesh)
 	{
@@ -135,7 +135,7 @@ void ACaveboundSparkBurst::BeginPlay()
 	for (int32 i = 0; i < Count; ++i)
 	{
 		UMaterialInstanceDynamic* Mat = nullptr;
-		UStaticMeshComponent* Ball = SoftVFX::MakeBall(
+		UStaticMeshComponent* Ball = VFX::MakeBall(
 			this,
 			Root,
 			Mesh,
@@ -254,12 +254,12 @@ void ACaveboundHoverEmbers::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UStaticMesh* Mesh = SoftVFX::SphereMesh();
+	UStaticMesh* Mesh = VFX::SphereMesh();
 	// Prefer emissive so they glow; fall back to soft translucent.
-	UMaterialInterface* BaseMat = SoftVFX::GlowMat();
+	UMaterialInterface* BaseMat = VFX::GlowMat();
 	if (!BaseMat)
 	{
-		BaseMat = SoftVFX::SoftMat();
+		BaseMat = VFX::SoftMat();
 	}
 	if (!Mesh)
 	{
@@ -274,7 +274,7 @@ void ACaveboundHoverEmbers::BeginPlay()
 	for (int32 i = 0; i < Count; ++i)
 	{
 		UMaterialInstanceDynamic* Mat = nullptr;
-		UStaticMeshComponent* Ball = SoftVFX::MakeBall(
+		UStaticMeshComponent* Ball = VFX::MakeBall(
 			this,
 			Root,
 			Mesh,
@@ -386,9 +386,9 @@ void ACaveboundMagicPoof::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UStaticMesh* Mesh = SoftVFX::SphereMesh();
+	UStaticMesh* Mesh = VFX::SphereMesh();
 	// soft translucent only — emissive looked broken on this effect
-	UMaterialInterface* Soft = SoftVFX::SoftMat();
+	UMaterialInterface* Soft = VFX::SoftMat();
 	if (!Mesh || !Soft)
 	{
 		Destroy();
@@ -398,7 +398,7 @@ void ACaveboundMagicPoof::BeginPlay()
 	// bright core puff
 	{
 		UMaterialInstanceDynamic* Mat = nullptr;
-		Core = SoftVFX::MakeBall(this, Root, Mesh, Soft, TEXT("PoofCore"), Mat);
+		Core = VFX::MakeBall(this, Root, Mesh, Soft, TEXT("PoofCore"), Mat);
 		Core->SetRelativeScale3D(FVector(0.12f));
 		Core->SetTranslucentSortPriority(2);
 		CoreMat = Mat;
@@ -415,7 +415,7 @@ void ACaveboundMagicPoof::BeginPlay()
 	for (int32 i = 0; i < Count; ++i)
 	{
 		UMaterialInstanceDynamic* Mat = nullptr;
-		UStaticMeshComponent* Puff = SoftVFX::MakeBall(
+		UStaticMeshComponent* Puff = VFX::MakeBall(
 			this,
 			Root,
 			Mesh,

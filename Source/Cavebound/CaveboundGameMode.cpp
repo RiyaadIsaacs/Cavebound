@@ -11,7 +11,7 @@
 #include "CaveboundRockDeposit.h"
 #include "CaveboundRockField.h"
 #include "CaveboundTerrainExpansion.h"
-#include "CaveboundSoftVFX.h"
+#include "CaveboundVFX.h"
 #include "CaveboundTree.h"
 #include "CaveboundTurret.h"
 #include "Components/SplineComponent.h"

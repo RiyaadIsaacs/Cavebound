@@ -889,7 +889,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 	AlignRightSideUI();
 	AlignTopHud();
 
-	// presents game over once the tree is gone
+	// presents game over once the tree is dead
 	if (!bGameOverScreenOpen)
 	{
 		if (const ACaveboundGameMode* GameMode = GetWorld()
@@ -931,7 +931,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 
 	if (IsTutorialActive())
 	{
-		// movement / camera locked while the tutorial card is up
+		// movement and camera locked while the tutorial card is up
 		bLeftMouseWasDown = bLMB;
 		bRightMouseWasDown = bRMB;
 		bOrbitingCamera = false;
@@ -1159,7 +1159,6 @@ AActor* ACaveboundPlayerController::TraceActorUnderCursor() const
 	return nullptr;
 }
 
-// walks owner/attach parents until a hover-health actor is found
 static AActor* FindHoverHealthActor(AActor* Start)
 {
 	AActor* Candidate = Start;
@@ -1201,7 +1200,6 @@ bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) co
 	FVector Origin = Actor->GetActorLocation();
 	FVector Extent(35.f, 35.f, 70.f);
 
-	// uses visible meshes only — collision volumes made hover sticky
 	FBox Combined(ForceInit);
 	bool bGotBounds = false;
 	TArray<UMeshComponent*> Meshes;
@@ -1233,7 +1231,6 @@ bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) co
 		Actor->GetActorBounds(true, Origin, Extent);
 	}
 
-	// Cap world extent so oversized meshes can't claim half the screen.
 	Extent.X = FMath::Min(Extent.X, 90.f);
 	Extent.Y = FMath::Min(Extent.Y, 90.f);
 	Extent.Z = FMath::Min(Extent.Z, 160.f);

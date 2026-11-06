@@ -1,6 +1,6 @@
 #include "CaveboundBaseEnemy.h"
 #include "CaveboundModelOutline.h"
-#include "CaveboundSoftVFX.h"
+#include "CaveboundVFX.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundSnare.h"
 #include "CaveboundTree.h"
@@ -17,10 +17,8 @@ ACaveboundBaseEnemy::ACaveboundBaseEnemy()
 
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	SetRootComponent(VisualMesh);
-	// Keep the root visible so child skeletal bodies are not culled by IsVisible().
 	VisualMesh->SetVisibility(true);
 	VisualMesh->SetHiddenInGame(false);
-	// Query-only: path movement teleports along the spline, so physics blocking
 	// between enemies fights the boid offsets and makes packs look stuck.
 	VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	VisualMesh->SetCollisionObjectType(ECC_WorldDynamic);
