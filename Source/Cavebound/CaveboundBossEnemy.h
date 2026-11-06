@@ -90,10 +90,10 @@ protected:
 	float BossMeshScale = 1.5f;
 
 	UPROPERTY(EditAnywhere, Category = "Boss")
-	float AuraRadiusScale = 2.8f;
+	float AuraRadiusScale = 3.f;
 
 	UPROPERTY(EditAnywhere, Category = "Boss")
-	float AuraHeightScale = 6.5f;
+	float AuraHeightScale = 5.5f;
 
 	// Kept very low so the wave cylinder stays a faint tint, not a solid column. 
 	UPROPERTY(EditAnywhere, Category = "Boss", meta = (ClampMin = "0.0", ClampMax = "1.0"))

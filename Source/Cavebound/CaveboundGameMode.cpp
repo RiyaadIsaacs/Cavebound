@@ -1256,6 +1256,7 @@ bool ACaveboundGameMode::IsBossRound() const
 	return ((RoundIndex + 1) % 3) == 0;
 }
 
+// Pool of boss modifiers. Once one is used, the next boss will have the same mods as the last boss
 void ACaveboundGameMode::PickNextBossModifier()
 {
 	static const ECaveboundBossModifierType Pool[] = {
@@ -1285,10 +1286,7 @@ void ACaveboundGameMode::PickNextBossModifier()
 	const ECaveboundBossModifierType Chosen = Available[Pick];
 	StackedBossModifiers.Add(Chosen);
 
-	UE_LOG(
-		LogTemp,
-		Log,
-		TEXT("PickNextBossModifier: added %s (stack size %d)"),
+	UE_LOG(LogTemp,Log,TEXT("PickNextBossModifier: added %s (stack size %d)"),
 		CaveboundBossModifierTypeName(Chosen),
 		StackedBossModifiers.Num());
 }
@@ -1376,12 +1374,7 @@ void ACaveboundGameMode::SpawnBossEnemy()
 	++EnemiesSpawnedThisRound;
 	++EnemiesAliveThisRound;
 
-	UE_LOG(
-		LogTemp,
-		Log,
-		TEXT("SpawnBossEnemy: #%d at %s (%d/%d alive=%d)"),
-		BossSpawnCount,
-		*Boss->GetActorLocation().ToCompactString(),
+	UE_LOG(LogTemp,Log,TEXT("SpawnBossEnemy: #%d at %s (%d/%d alive=%d)"),BossSpawnCount,*Boss->GetActorLocation().ToCompactString(),
 		EnemiesSpawnedThisRound,
 		EnemiesToSpawnThisRound,
 		EnemiesAliveThisRound);
