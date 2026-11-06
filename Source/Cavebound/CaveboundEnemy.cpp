@@ -113,7 +113,7 @@ ACaveboundEnemy::ACaveboundEnemy()
 
 	// Defaults for this enemy type (Adaptive Threat Budget gate)
 	MinDifficultyToSpawn = 0;
-	MaxHealth = 60.f;
+	MaxHealth = 150.f;
 	Health = MaxHealth;
 	MoveSpeed = 280.f;
 	AttackDamage = 8.f;

@@ -38,8 +38,9 @@ namespace CaveboundShaderMaterials
 	static constexpr const TCHAR* PoisonPulsePath = TEXT("/Game/Assets/Materials/M_PoisonPulse.M_PoisonPulse");
 	static constexpr const TCHAR* TowerDamagePackage = TEXT("/Game/Assets/Materials/M_TowerDamageDisplace");
 	static constexpr const TCHAR* TowerDamagePath = TEXT("/Game/Assets/Materials/M_TowerDamageDisplace.M_TowerDamageDisplace");
-	static constexpr const TCHAR* TierAuraPackage = TEXT("/Game/Assets/Materials/M_TierAura");
-	static constexpr const TCHAR* TierAuraPath = TEXT("/Game/Assets/Materials/M_TierAura.M_TierAura");
+	// V2: travelling radial ring waves (V1 was colour-pulse only / stale cache risk).
+	static constexpr const TCHAR* TierAuraPackage = TEXT("/Game/Assets/Materials/M_TierAuraV2");
+	static constexpr const TCHAR* TierAuraPath = TEXT("/Game/Assets/Materials/M_TierAuraV2.M_TierAuraV2");
 	static constexpr const TCHAR* EnragePulsePackage = TEXT("/Game/Assets/Materials/M_EnragePulse");
 	static constexpr const TCHAR* EnragePulsePath = TEXT("/Game/Assets/Materials/M_EnragePulse.M_EnragePulse");
 	// V3: Intensity drives emissive only; OpacityBoost drives rim strength (V2 was too faint).
@@ -207,8 +208,23 @@ namespace CaveboundShaderMaterials
 
 		UMaterialExpressionScalarParameter* Opacity = NewObject<UMaterialExpressionScalarParameter>(Material);
 		Opacity->ParameterName = TEXT("Opacity");
-		Opacity->DefaultValue = 0.28f;
+		Opacity->DefaultValue = 0.05f;
 		EditorData->ExpressionCollection.AddExpression(Opacity);
+
+		UMaterialExpressionScalarParameter* WaveFreq = NewObject<UMaterialExpressionScalarParameter>(Material);
+		WaveFreq->ParameterName = TEXT("WaveFreq");
+		WaveFreq->DefaultValue = 0.08f;
+		EditorData->ExpressionCollection.AddExpression(WaveFreq);
+
+		UMaterialExpressionScalarParameter* WaveSpeed = NewObject<UMaterialExpressionScalarParameter>(Material);
+		WaveSpeed->ParameterName = TEXT("WaveSpeed");
+		WaveSpeed->DefaultValue = 2.0f;
+		EditorData->ExpressionCollection.AddExpression(WaveSpeed);
+
+		UMaterialExpressionScalarParameter* WaveAmount = NewObject<UMaterialExpressionScalarParameter>(Material);
+		WaveAmount->ParameterName = TEXT("WaveAmount");
+		WaveAmount->DefaultValue = 12.f;
+		EditorData->ExpressionCollection.AddExpression(WaveAmount);
 
 		UMaterialExpressionTime* TimeNode = NewObject<UMaterialExpressionTime>(Material);
 		EditorData->ExpressionCollection.AddExpression(TimeNode);
@@ -249,6 +265,51 @@ namespace CaveboundShaderMaterials
 		ColourLerp->ConnectExpression(&EditorData->EmissiveColor, 0);
 		ColourLerp->ConnectExpression(&EditorData->BaseColor, 0);
 		Opacity->ConnectExpression(&EditorData->Opacity, 0);
+
+		// Traveling radial waves: Normal * sin(Z * WaveFreq + Time * WaveSpeed) * WaveAmount
+		UMaterialExpressionWorldPosition* WorldPos = NewObject<UMaterialExpressionWorldPosition>(Material);
+		EditorData->ExpressionCollection.AddExpression(WorldPos);
+
+		UMaterialExpressionComponentMask* PosZ = NewObject<UMaterialExpressionComponentMask>(Material);
+		PosZ->R = false;
+		PosZ->G = false;
+		PosZ->B = true;
+		PosZ->A = false;
+		EditorData->ExpressionCollection.AddExpression(PosZ);
+		PosZ->Input.Connect(0, WorldPos);
+
+		UMaterialExpressionMultiply* ZScaled = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(ZScaled);
+		ZScaled->A.Connect(0, PosZ);
+		ZScaled->B.Connect(0, WaveFreq);
+
+		UMaterialExpressionMultiply* WaveTime = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(WaveTime);
+		WaveTime->A.Connect(0, TimeNode);
+		WaveTime->B.Connect(0, WaveSpeed);
+
+		UMaterialExpressionAdd* WavePhase = NewObject<UMaterialExpressionAdd>(Material);
+		EditorData->ExpressionCollection.AddExpression(WavePhase);
+		WavePhase->A.Connect(0, ZScaled);
+		WavePhase->B.Connect(0, WaveTime);
+
+		UMaterialExpressionSine* WaveSine = NewObject<UMaterialExpressionSine>(Material);
+		EditorData->ExpressionCollection.AddExpression(WaveSine);
+		WaveSine->Input.Connect(0, WavePhase);
+
+		UMaterialExpressionMultiply* WaveScaled = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(WaveScaled);
+		WaveScaled->A.Connect(0, WaveSine);
+		WaveScaled->B.Connect(0, WaveAmount);
+
+		UMaterialExpressionVertexNormalWS* NormalWS = NewObject<UMaterialExpressionVertexNormalWS>(Material);
+		EditorData->ExpressionCollection.AddExpression(NormalWS);
+
+		UMaterialExpressionMultiply* WaveOffset = NewObject<UMaterialExpressionMultiply>(Material);
+		EditorData->ExpressionCollection.AddExpression(WaveOffset);
+		WaveOffset->A.Connect(0, NormalWS);
+		WaveOffset->B.Connect(0, WaveScaled);
+		WaveOffset->ConnectExpression(&EditorData->WorldPositionOffset, 0);
 
 		FinalizeMaterial(Material);
 		return Material;
@@ -788,7 +849,7 @@ namespace CaveboundShaderMaterials
 		return EnsureContentMaterial(
 			TierAuraPath,
 			TierAuraPackage,
-			TEXT("M_TierAura"),
+			TEXT("M_TierAuraV2"),
 			[](UObject* Outer, FName Name) { return BuildTierAuraMaterial(Outer, Name); });
 #else
 		return LoadObject<UMaterialInterface>(nullptr, TierAuraPath);

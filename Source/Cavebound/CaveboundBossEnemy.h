@@ -37,7 +37,7 @@ public:
 	virtual void ApplyDamage(float Amount) override;
 	virtual FText GetHoverDisplayName_Implementation() const override { return FText::FromString(TEXT("Boss")); }
 
-	/** SpawnIndex is 1-based BossSpawnCount. StackedTypes are persistent modifiers for this run. */
+	// SpawnIndex is 1-based BossSpawnCount. StackedTypes are persistent modifiers for this run. 
 	void ConfigureSpawn(int32 SpawnIndex, const TArray<ECaveboundBossModifierType>& StackedTypes, bool bAsSplitMinion = false);
 
 	void MultiplyAttackRange(float Multiplier);
@@ -68,9 +68,11 @@ protected:
 	void TriggerEnrageVisuals();
 	void WireBossCombatMontages();
 	FLinearColor ResolveTierAuraColor(int32 SpawnIndex) const;
+	FVector GetAuraScale() const;
+	void ApplyAuraScale();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Boss")
-	TObjectPtr<UStaticMeshComponent> AuraSphere;
+	TObjectPtr<UStaticMeshComponent> AuraMesh;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> AuraMID;
@@ -88,7 +90,14 @@ protected:
 	float BossMeshScale = 1.5f;
 
 	UPROPERTY(EditAnywhere, Category = "Boss")
-	float AuraBaseScale = 3.5f;
+	float AuraRadiusScale = 2.8f;
+
+	UPROPERTY(EditAnywhere, Category = "Boss")
+	float AuraHeightScale = 6.5f;
+
+	// Kept very low so the wave cylinder stays a faint tint, not a solid column. 
+	UPROPERTY(EditAnywhere, Category = "Boss", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float AuraOpacity = 0.02f;
 
 	UPROPERTY(EditAnywhere, Category = "Boss|Poison")
 	float PoisonTickInterval = 0.5f;

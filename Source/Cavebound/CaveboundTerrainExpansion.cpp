@@ -458,7 +458,7 @@ int32 FCaveboundTerrainExpansion::ExpandBuildSlots(
 {
 	using namespace CaveboundTerrainExpansionPrivate;
 
-	AActor* Terrain = FindProceduralTerrain(World);
+	AActor* Terrain = CaveboundTerrainExpansionPrivate::FindProceduralTerrain(World);
 	if (!Terrain)
 	{
 		UE_LOG(LogCaveboundSlots, Warning, TEXT("ExpandBuildSlots: BP_ProceduralTerrain not found"));

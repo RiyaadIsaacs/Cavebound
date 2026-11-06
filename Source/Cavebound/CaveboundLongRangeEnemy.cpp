@@ -26,7 +26,7 @@ ACaveboundLongRangeEnemy::ACaveboundLongRangeEnemy()
 	}
 
 	MinDifficultyToSpawn = 55;
-	MaxHealth = 55.f;
+	MaxHealth = 150.f;
 	Health = MaxHealth;
 	MoveSpeed = 220.f;
 	AttackDamage = 12.f;

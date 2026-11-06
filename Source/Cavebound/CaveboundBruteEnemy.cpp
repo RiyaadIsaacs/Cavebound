@@ -18,7 +18,7 @@ ACaveboundBruteEnemy::ACaveboundBruteEnemy()
 	}
 
 	MinDifficultyToSpawn = 40;
-	MaxHealth = 160.f;
+	MaxHealth = 350.f;
 	Health = MaxHealth;
 	MoveSpeed = 140.f;
 	AttackDamage = 6.f;

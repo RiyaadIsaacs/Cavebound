@@ -9,7 +9,7 @@ class UObject;
  * Custom shaders:
  * M_PoisonPulse: translucent unlit, lerps two greens over Time
  * M_TowerDamageDisplace: a wobble effect scaled by DamageAmount (0 healthy .. 1 damaged)
- * M_TierAura: translucent unlit pulse for boss tier aura (AuraColorA/B)
+ * M_TierAuraV2: translucent unlit pulse + traveling radial WPO waves for boss aura
  * M_EnragePulse: purple emissive pulse + light WPO for boss enrage
  * M_HoverOutline: translucent unlit fresnel rim for hover outlines
  * M_RockMineDisplace: sink + crumble WPO scaled by MineAmount (0 full .. 1 empty)

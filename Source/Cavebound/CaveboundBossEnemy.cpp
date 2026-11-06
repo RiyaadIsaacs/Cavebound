@@ -34,18 +34,18 @@ ACaveboundBossEnemy::ACaveboundBossEnemy()
 		Body->SetSkeletalMeshAsset(BodyMesh);
 	}
 
-	AuraSphere = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("AuraSphere"));
-	AuraSphere->SetupAttachment(VisualMesh);
-	AuraSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	AuraSphere->SetCastShadow(false);
-	AuraSphere->bDisallowNanite = true;
-	AuraSphere->SetRelativeLocation(FVector(0.f, 0.f, 80.f));
-	AuraSphere->SetRelativeScale3D(FVector(AuraBaseScale));
+	AuraMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("AuraMesh"));
+	AuraMesh->SetupAttachment(VisualMesh);
+	AuraMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	AuraMesh->SetCastShadow(false);
+	AuraMesh->bDisallowNanite = true;
+	AuraMesh->SetRelativeLocation(FVector(0.f, 0.f, 140.f));
+	AuraMesh->SetRelativeScale3D(GetAuraScale());
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	if (SphereMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	if (CylinderMesh.Succeeded())
 	{
-		AuraSphere->SetStaticMesh(SphereMesh.Object);
+		AuraMesh->SetStaticMesh(CylinderMesh.Object);
 	}
 
 	if (HitVolume)
@@ -55,7 +55,7 @@ ACaveboundBossEnemy::ACaveboundBossEnemy()
 	}
 
 	MinDifficultyToSpawn = 9999; // Never picked by Adaptive Threat Budget pool
-	MaxHealth = 480.f;
+	MaxHealth = 2400.f;
 	Health = MaxHealth;
 	MoveSpeed = 160.f;
 	AttackDamage = 22.f;
@@ -233,9 +233,20 @@ void ACaveboundBossEnemy::ApplyModifiers()
 	{
 		Body->SetRelativeScale3D(FVector(BossMeshScale));
 	}
-	if (AuraSphere)
+	ApplyAuraScale();
+}
+
+FVector ACaveboundBossEnemy::GetAuraScale() const
+{
+	const float Mul = AuraScaleMultiplier;
+	return FVector(AuraRadiusScale * Mul, AuraRadiusScale * Mul, AuraHeightScale * Mul);
+}
+
+void ACaveboundBossEnemy::ApplyAuraScale()
+{
+	if (AuraMesh)
 	{
-		AuraSphere->SetRelativeScale3D(FVector(AuraBaseScale * AuraScaleMultiplier));
+		AuraMesh->SetRelativeScale3D(GetAuraScale());
 	}
 }
 
@@ -257,10 +268,7 @@ void ACaveboundBossEnemy::MultiplyVisualScale(float Multiplier)
 void ACaveboundBossEnemy::MultiplyAuraScale(float Multiplier)
 {
 	AuraScaleMultiplier *= Multiplier;
-	if (AuraSphere)
-	{
-		AuraSphere->SetRelativeScale3D(FVector(AuraBaseScale * AuraScaleMultiplier));
-	}
+	ApplyAuraScale();
 }
 
 FLinearColor ACaveboundBossEnemy::ResolveTierAuraColor(int32 SpawnIndex) const
@@ -282,7 +290,7 @@ FLinearColor ACaveboundBossEnemy::ResolveTierAuraColor(int32 SpawnIndex) const
 
 void ACaveboundBossEnemy::SetupAuraVisuals(int32 SpawnIndex)
 {
-	if (!AuraSphere)
+	if (!AuraMesh)
 	{
 		return;
 	}
@@ -301,14 +309,17 @@ void ACaveboundBossEnemy::SetupAuraVisuals(int32 SpawnIndex)
 		AuraMID->SetVectorParameterValue(TEXT("AuraColorB"), Color * 1.25f);
 		AuraMID->SetVectorParameterValue(TEXT("GreenA"), Color);
 		AuraMID->SetVectorParameterValue(TEXT("GreenB"), Color * 1.25f);
-		AuraMID->SetScalarParameterValue(TEXT("Opacity"), 0.28f);
+		AuraMID->SetScalarParameterValue(TEXT("Opacity"), AuraOpacity);
 		AuraMID->SetScalarParameterValue(TEXT("PulseSpeed"), 1.2f);
-		AuraSphere->SetMaterial(0, AuraMID);
+		AuraMID->SetScalarParameterValue(TEXT("WaveFreq"), 0.08f);
+		AuraMID->SetScalarParameterValue(TEXT("WaveSpeed"), 2.0f);
+		AuraMID->SetScalarParameterValue(TEXT("WaveAmount"), 12.f);
+		AuraMesh->SetMaterial(0, AuraMID);
 	}
 
-	AuraSphere->SetVisibility(true);
-	AuraSphere->SetHiddenInGame(false);
-	AuraSphere->SetRelativeScale3D(FVector(AuraBaseScale * AuraScaleMultiplier));
+	AuraMesh->SetVisibility(true);
+	AuraMesh->SetHiddenInGame(false);
+	ApplyAuraScale();
 }
 
 void ACaveboundBossEnemy::ApplyDamage(float Amount)
@@ -372,8 +383,10 @@ void ACaveboundBossEnemy::TriggerEnrageVisuals()
 		AuraMID->SetVectorParameterValue(TEXT("AuraColorB"), Purple * 1.3f);
 		AuraMID->SetVectorParameterValue(TEXT("GreenA"), Purple);
 		AuraMID->SetVectorParameterValue(TEXT("GreenB"), Purple * 1.3f);
-		AuraMID->SetScalarParameterValue(TEXT("Opacity"), 0.4f);
+		AuraMID->SetScalarParameterValue(TEXT("Opacity"), FMath::Min(AuraOpacity * 1.4f, 0.08f));
 		AuraMID->SetScalarParameterValue(TEXT("PulseSpeed"), 2.8f);
+		// Faster travel only — keep WaveAmount steady so it does not thrash.
+		AuraMID->SetScalarParameterValue(TEXT("WaveSpeed"), 3.2f);
 	}
 }
 
@@ -579,9 +592,9 @@ void ACaveboundBossEnemy::OnDeath()
 		}
 	}
 
-	if (AuraSphere)
+	if (AuraMesh)
 	{
-		AuraSphere->SetVisibility(false);
+		AuraMesh->SetVisibility(false);
 	}
 
 	Super::OnDeath();
