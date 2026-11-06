@@ -954,7 +954,24 @@ int32 ACaveboundGameMode::ExpandBuildSlots()
 
 	// Paths were extended with the map — refresh cached splines for the next wave
 	CollectPathSplines();
+
+	// Map grew — pull fog back to the new rim (again next tick after mesh scale settles).
 	EnsureMapEdgeFog();
+	if (MapEdgeFog)
+	{
+		MapEdgeFog->PullBackToExpandedMap();
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+			{
+				if (MapEdgeFog)
+				{
+					MapEdgeFog->RefreshFromTerrain();
+				}
+			}));
+		}
+	}
+
 	return Spawned;
 }
 

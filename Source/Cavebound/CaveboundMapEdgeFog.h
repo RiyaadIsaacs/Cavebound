@@ -21,6 +21,9 @@ public:
 
 	void RefreshFromTerrain();
 
+	/** Call after the map expands so fog retreats with the new rim. */
+	void PullBackToExpandedMap();
+
 	/** Clear playable core ends this far inside the terrain rim. */
 	UPROPERTY(EditAnywhere, Category = "Fog")
 	float EdgeInset = 900.f;

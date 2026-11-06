@@ -59,7 +59,7 @@ namespace
 		return false;
 	}
 
-	AActor* FindProceduralTerrain(UWorld* World)
+	AActor* FindMapFogTerrain(UWorld* World)
 	{
 		if (!World)
 		{
@@ -370,12 +370,19 @@ void ACaveboundMapEdgeFog::BeginPlay()
 	RefreshFromTerrain();
 }
 
+void ACaveboundMapEdgeFog::PullBackToExpandedMap()
+{
+	// Ease the fog inland cover a little each expand so more of the new rim stays clear.
+	EdgeInset = FMath::Max(400.f, EdgeInset - 75.f);
+	RefreshFromTerrain();
+}
+
 void ACaveboundMapEdgeFog::RefreshFromTerrain()
 {
 	EnsurePostProcess();
 
 	UWorld* World = GetWorld();
-	AActor* Terrain = FindProceduralTerrain(World);
+	AActor* Terrain = FindMapFogTerrain(World);
 	if (!Terrain || !FogMID)
 	{
 		return;
