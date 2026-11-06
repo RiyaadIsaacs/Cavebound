@@ -11,10 +11,10 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 
-namespace
+namespace WaveCountdownHud
 {
-	constexpr float HudEdge = 24.f;
-	constexpr int32 HudFont = 18;
+	constexpr float Edge = 24.f;
+	constexpr int32 FontSize = 18;
 }
 
 void UCaveboundWaveCountdown::NativeOnInitialized()
@@ -43,7 +43,7 @@ void UCaveboundWaveCountdown::NativeOnInitialized()
 	TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("WaveTitle"));
 	TitleText->SetText(FText::FromString(TEXT("Grace Period")));
 	TitleText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
-	TitleText->SetFont(CaveboundUIStyle::Font(HudFont));
+	TitleText->SetFont(CaveboundUIStyle::Font(WaveCountdownHud::FontSize));
 	TitleText->SetJustification(ETextJustify::Center);
 	TitleText->SetAutoWrapText(true);
 	TitleText->SetShadowColorAndOpacity(FLinearColor(0.12f, 0.08f, 0.06f, 0.5f));
@@ -57,7 +57,7 @@ void UCaveboundWaveCountdown::NativeOnInitialized()
 	TimeText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("WaveTime"));
 	TimeText->SetText(FText::FromString(TEXT("Start new wave to enter preparation phase")));
 	TimeText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
-	TimeText->SetFont(CaveboundUIStyle::Font(HudFont));
+	TimeText->SetFont(CaveboundUIStyle::Font(WaveCountdownHud::FontSize));
 	TimeText->SetJustification(ETextJustify::Center);
 	TimeText->SetAutoWrapText(true);
 	if (UVerticalBoxSlot* TimeSlot = Body->AddChildToVerticalBox(TimeText))
@@ -74,7 +74,7 @@ void UCaveboundWaveCountdown::NativeOnInitialized()
 	{
 		PanelSlot->SetAnchors(FAnchors(0.5f, 0.f));
 		PanelSlot->SetAlignment(FVector2D(0.5f, 0.f));
-		PanelSlot->SetPosition(FVector2D(0.f, HudEdge));
+		PanelSlot->SetPosition(FVector2D(0.f, WaveCountdownHud::Edge));
 		PanelSlot->SetAutoSize(true);
 	}
 }

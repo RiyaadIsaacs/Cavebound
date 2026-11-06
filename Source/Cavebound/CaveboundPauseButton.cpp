@@ -9,10 +9,10 @@
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 
-namespace
+namespace PauseButtonHud
 {
-	constexpr float HudEdge = 24.f;
-	constexpr int32 HudFont = 18;
+	constexpr float Edge = 24.f;
+	constexpr int32 FontSize = 18;
 }
 
 void UCaveboundPauseButton::NativeOnInitialized()
@@ -37,7 +37,7 @@ void UCaveboundPauseButton::NativeOnInitialized()
 	Label->SetText(FText::FromString(TEXT("II")));
 	Label->SetJustification(ETextJustify::Center);
 	Label->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
-	Label->SetFont(CaveboundUIStyle::Font(HudFont));
+	Label->SetFont(CaveboundUIStyle::Font(PauseButtonHud::FontSize));
 	PauseButton->AddChild(Label);
 	if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(PauseButton->GetContentSlot()))
 	{
@@ -56,7 +56,7 @@ void UCaveboundPauseButton::NativeOnInitialized()
 	{
 		PanelSlot->SetAnchors(FAnchors(1.f, 0.f));
 		PanelSlot->SetAlignment(FVector2D(1.f, 0.5f));
-		PanelSlot->SetPosition(FVector2D(-HudEdge, HudEdge + 32.f));
+		PanelSlot->SetPosition(FVector2D(-PauseButtonHud::Edge, PauseButtonHud::Edge + 32.f));
 		PanelSlot->SetAutoSize(true);
 	}
 
@@ -80,7 +80,7 @@ void UCaveboundPauseButton::AlignToTreeBarCenter(const FVector2D& TreeBarAbsolut
 	const float LocalY = Geo.AbsoluteToLocal(TreeBarAbsoluteCenter).Y;
 	PanelSlot->SetAnchors(FAnchors(1.f, 0.f));
 	PanelSlot->SetAlignment(FVector2D(1.f, 0.5f));
-	PanelSlot->SetPosition(FVector2D(-HudEdge, LocalY));
+	PanelSlot->SetPosition(FVector2D(-PauseButtonHud::Edge, LocalY));
 }
 
 void UCaveboundPauseButton::HandleClicked()

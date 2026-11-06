@@ -24,6 +24,7 @@ class UCaveboundPauseMenu;
 class UCaveboundGameOverScreen;
 class UCaveboundScreenFade;
 class UCaveboundGameplayHud;
+class UCaveboundTutorialCard;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class ACaveboundTurret;
@@ -81,6 +82,11 @@ public:
 	/** Shows the game-over overlay after the tree dies. */
 	void ShowGameOverScreen();
 
+	/** Shows the grace-phase tip (gather / build blocked). */
+	void NotifyGracePhaseBlocked();
+
+	bool IsTutorialActive() const;
+
 	// B at a free build slot opens the defender picker. The choice calls this.
 	bool PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<AActor> DefenderClass);
 
@@ -120,8 +126,9 @@ protected:
 	void AlignRightSideUI();
 	void AlignTopHud();
 	void ToggleControlsPanel();
+	void AdvanceTutorial();
+	void SkipTutorial();
 	bool IsInGracePeriod() const;
-	void NotifyGraceBuildBlocked();
 	void SetGameSpeed(float Speed);
 	void RefreshSpeedButtonStyles();
 	void UpdateHoverInfoWidget();
@@ -255,6 +262,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundControlsPanel> ControlsPanel;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundTutorialCard> TutorialCard;
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundHoverInfo> HoverInfo;

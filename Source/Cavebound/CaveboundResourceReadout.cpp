@@ -15,11 +15,11 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 
-namespace
+namespace ResourceReadoutHud
 {
-	constexpr float HudGap = 12.f; // matches speed-button spacing (6 + 6)
-	constexpr float HudEdge = 24.f;
-	constexpr int32 HudFont = 18;
+	constexpr float Gap = 12.f; // matches speed-button spacing (6 + 6)
+	constexpr float Edge = 24.f;
+	constexpr int32 FontSize = 18;
 }
 
 void UCaveboundResourceReadout::NativeOnInitialized()
@@ -51,7 +51,7 @@ void UCaveboundResourceReadout::NativeOnInitialized()
 	TreeLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TreeLabel"));
 	TreeLabel->SetText(FText::FromString(TEXT("Tree")));
 	TreeLabel->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
-	TreeLabel->SetFont(CaveboundUIStyle::Font(HudFont));
+	TreeLabel->SetFont(CaveboundUIStyle::Font(ResourceReadoutHud::FontSize));
 	TreeLabel->SetShadowColorAndOpacity(FLinearColor(0.15f, 0.1f, 0.08f, 0.55f));
 	TreeLabel->SetShadowOffset(FVector2D(1.f, 1.f));
 	if (UVerticalBoxSlot* LabelSlot = TreeBody->AddChildToVerticalBox(TreeLabel))
@@ -76,7 +76,7 @@ void UCaveboundResourceReadout::NativeOnInitialized()
 
 	TreeHealthText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TreeHP"));
 	TreeHealthText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
-	TreeHealthText->SetFont(CaveboundUIStyle::Font(HudFont));
+	TreeHealthText->SetFont(CaveboundUIStyle::Font(ResourceReadoutHud::FontSize));
 	TreeHealthText->SetText(FText::FromString(TEXT("100 / 100")));
 	if (UVerticalBoxSlot* HpSlot = TreeBody->AddChildToVerticalBox(TreeHealthText))
 	{
@@ -85,7 +85,9 @@ void UCaveboundResourceReadout::NativeOnInitialized()
 
 	if (UVerticalBoxSlot* TreeSlot = Stack->AddChildToVerticalBox(TreePlate))
 	{
-		TreeSlot->SetPadding(FMargin(0.f, 0.f, 0.f, HudGap));
+		TreeSlot->SetPadding(FMargin(0.f, 0.f, 0.f, ResourceReadoutHud::Gap));
+		TreeSlot->SetHorizontalAlignment(HAlign_Left);
+		TreeSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
 	}
 
 	// wood / rock row — same gap as speed buttons
@@ -103,7 +105,7 @@ void UCaveboundResourceReadout::NativeOnInitialized()
 		OutText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TextName);
 		OutText->SetText(FText::FromString(Initial));
 		OutText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
-		OutText->SetFont(CaveboundUIStyle::Font(HudFont));
+		OutText->SetFont(CaveboundUIStyle::Font(ResourceReadoutHud::FontSize));
 		OutText->SetJustification(ETextJustify::Center);
 		OutText->SetShadowColorAndOpacity(FLinearColor(0.15f, 0.1f, 0.08f, 0.55f));
 		OutText->SetShadowOffset(FVector2D(1.f, 1.f));
@@ -116,7 +118,7 @@ void UCaveboundResourceReadout::NativeOnInitialized()
 
 		if (UHorizontalBoxSlot* PlateSlot = Row->AddChildToHorizontalBox(MinWidth))
 		{
-			PlateSlot->SetPadding(bLast ? FMargin(0.f) : FMargin(0.f, 0.f, HudGap, 0.f));
+			PlateSlot->SetPadding(bLast ? FMargin(0.f) : FMargin(0.f, 0.f, ResourceReadoutHud::Gap, 0.f));
 			PlateSlot->SetVerticalAlignment(VAlign_Center);
 		}
 	};
@@ -125,53 +127,68 @@ void UCaveboundResourceReadout::NativeOnInitialized()
 	MakeCounter(TEXT("RockText"), RockText, TEXT("Rock  0"), true);
 	if (UVerticalBoxSlot* RowSlot = Stack->AddChildToVerticalBox(Row))
 	{
-		RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, HudGap));
+		RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, ResourceReadoutHud::Gap));
+		RowSlot->SetHorizontalAlignment(HAlign_Left);
+		RowSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
 	}
 
-	// tip shown when building is blocked during grace period
+	// tip shown when gather / build is blocked during grace — width capped so the tree card doesn't stretch
 	GraceTipFrame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("GraceTipFrame"));
 	GraceTipFrame->SetPadding(FMargin(16.f, 10.f, 16.f, 12.f));
 	GraceTipFrame->SetBrush(CaveboundUIStyle::MakePanelBrush());
 	GraceTipFrame->SetVisibility(ESlateVisibility::Collapsed);
 
 	GraceTipText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("GraceTipText"));
-	GraceTipText->SetText(FText::FromString(TEXT("You haven't entered the preparation phase")));
+	GraceTipText->SetText(FText::FromString(TEXT("You can only gather resources during preparation or combat phase")));
 	GraceTipText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
-	GraceTipText->SetFont(CaveboundUIStyle::Font(HudFont));
+	GraceTipText->SetFont(CaveboundUIStyle::Font(ResourceReadoutHud::FontSize));
 	GraceTipText->SetAutoWrapText(true);
 	GraceTipFrame->SetContent(GraceTipText);
-	Stack->AddChildToVerticalBox(GraceTipFrame);
+
+	USizeBox* TipSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("GraceTipSize"));
+	TipSize->SetWidthOverride(316.f);
+	TipSize->SetContent(GraceTipFrame);
+	if (UVerticalBoxSlot* TipSlot = Stack->AddChildToVerticalBox(TipSize))
+	{
+		TipSlot->SetHorizontalAlignment(HAlign_Left);
+		TipSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+	}
 
 	PanelSlot = Canvas->AddChildToCanvas(Stack);
 	if (PanelSlot)
 	{
 		PanelSlot->SetAnchors(FAnchors(0.f, 0.f));
 		PanelSlot->SetAlignment(FVector2D(0.f, 0.f));
-		PanelSlot->SetPosition(FVector2D(HudEdge, HudEdge));
+		PanelSlot->SetPosition(FVector2D(ResourceReadoutHud::Edge, ResourceReadoutHud::Edge));
 		PanelSlot->SetAutoSize(true);
 	}
 }
 
-void UCaveboundResourceReadout::ShowGraceBuildTip()
+void UCaveboundResourceReadout::ShowGracePhaseTip()
 {
-	GraceTipLife = 4.f;
 	if (GraceTipFrame)
 	{
 		GraceTipFrame->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 }
 
-void UCaveboundResourceReadout::TickGraceTip(float DeltaTime)
+void UCaveboundResourceReadout::ClearGracePhaseTip()
 {
-	if (GraceTipLife <= 0.f)
-	{
-		return;
-	}
-
-	GraceTipLife -= DeltaTime;
-	if (GraceTipLife <= 0.f && GraceTipFrame)
+	if (GraceTipFrame)
 	{
 		GraceTipFrame->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UCaveboundResourceReadout::UpdateGracePhaseTip()
+{
+	// tip only belongs in grace — clear as soon as preparation / combat starts
+	const ACaveboundGameMode* GameMode = GetWorld()
+		? GetWorld()->GetAuthGameMode<ACaveboundGameMode>()
+		: nullptr;
+	if (!GameMode || !GameMode->IsRoundIdle())
+	{
+		ClearGracePhaseTip();
 	}
 }
 

@@ -9,6 +9,7 @@
 #include "CaveboundPauseButton.h"
 #include "CaveboundPauseMenu.h"
 #include "CaveboundScreenFade.h"
+#include "CaveboundTutorialCard.h"
 #include "CaveboundWaveCountdown.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundDamageVignette.h"
@@ -167,6 +168,17 @@ void ACaveboundPlayerController::ShowHUD()
 		if (ControlsPanel)
 		{
 			ControlsPanel->AddToViewport(1);
+		}
+	}
+
+	// bottom-center tutorial card — locks movement until finished / skipped
+	if (!TutorialCard)
+	{
+		TutorialCard = CreateWidget<UCaveboundTutorialCard>(this, UCaveboundTutorialCard::StaticClass());
+		if (TutorialCard)
+		{
+			TutorialCard->AddToViewport(5);
+			TutorialCard->BeginTutorial();
 		}
 	}
 
@@ -773,11 +785,11 @@ bool ACaveboundPlayerController::IsInGracePeriod() const
 	return GameMode && GameMode->IsRoundIdle();
 }
 
-void ACaveboundPlayerController::NotifyGraceBuildBlocked()
+void ACaveboundPlayerController::NotifyGracePhaseBlocked()
 {
 	if (RockReadout)
 	{
-		RockReadout->ShowGraceBuildTip();
+		RockReadout->ShowGracePhaseTip();
 	}
 }
 
@@ -805,12 +817,39 @@ void ACaveboundPlayerController::SetupInputComponent()
 		InputComponent->BindKey(EKeys::B, IE_Pressed, this, &ACaveboundPlayerController::HandleBuildKey);
 		InputComponent->BindKey(EKeys::F, IE_Pressed, this, &ACaveboundPlayerController::HandleDefenderKey);
 		InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ACaveboundPlayerController::RequestStartRound);
+		InputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &ACaveboundPlayerController::AdvanceTutorial);
+		InputComponent->BindKey(EKeys::H, IE_Pressed, this, &ACaveboundPlayerController::SkipTutorial);
 	}
+}
+
+bool ACaveboundPlayerController::IsTutorialActive() const
+{
+	return TutorialCard && TutorialCard->IsActive();
+}
+
+void ACaveboundPlayerController::AdvanceTutorial()
+{
+	if (bPauseMenuOpen || bGameOverScreenOpen || !TutorialCard)
+	{
+		return;
+	}
+
+	TutorialCard->Advance();
+}
+
+void ACaveboundPlayerController::SkipTutorial()
+{
+	if (bPauseMenuOpen || bGameOverScreenOpen || !TutorialCard)
+	{
+		return;
+	}
+
+	TutorialCard->Skip();
 }
 
 void ACaveboundPlayerController::RequestStartRound()
 {
-	if (bPauseMenuOpen || bGameOverScreenOpen)
+	if (bPauseMenuOpen || bGameOverScreenOpen || IsTutorialActive())
 	{
 		return;
 	}
@@ -840,7 +879,7 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 	if (RockReadout)
 	{
 		RockReadout->Refresh();
-		RockReadout->TickGraceTip(DeltaTime);
+		RockReadout->UpdateGracePhaseTip();
 	}
 	if (WaveCountdown)
 	{
@@ -889,6 +928,15 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 	float MouseX = 0.f;
 	float MouseY = 0.f;
 	const bool bMouseInViewport = GetMousePosition(MouseX, MouseY);
+
+	if (IsTutorialActive())
+	{
+		// movement / camera locked while the tutorial card is up
+		bLeftMouseWasDown = bLMB;
+		bRightMouseWasDown = bRMB;
+		bOrbitingCamera = false;
+		return;
+	}
 
 	if (bLMB && !bLeftMouseWasDown && bMouseInViewport)
 	{
@@ -1025,6 +1073,7 @@ bool ACaveboundPlayerController::IsPointerOverInteractiveUI() const
 void ACaveboundPlayerController::OnClickMove()
 {
 	if (bPauseMenuOpen
+		|| IsTutorialActive()
 		|| (BuildMenu && BuildMenu->IsInViewport())
 		|| (DefenderMenu && DefenderMenu->IsInViewport())
 		|| IsPointerOverInteractiveUI())
@@ -1772,7 +1821,7 @@ void ACaveboundPlayerController::StripSlotPlaceKeys()
 // B key — opens / closes the place-defender menu
 void ACaveboundPlayerController::HandleBuildKey()
 {
-	if (bPauseMenuOpen || bGameOverScreenOpen)
+	if (bPauseMenuOpen || bGameOverScreenOpen || IsTutorialActive())
 	{
 		return;
 	}
@@ -1790,7 +1839,7 @@ void ACaveboundPlayerController::HandleBuildKey()
 
 	if (IsInGracePeriod())
 	{
-		NotifyGraceBuildBlocked();
+		NotifyGracePhaseBlocked();
 		return;
 	}
 
@@ -1803,7 +1852,7 @@ void ACaveboundPlayerController::HandleBuildKey()
 // F key — opens / closes the upgrade / repair / disarm menu
 void ACaveboundPlayerController::HandleDefenderKey()
 {
-	if (bPauseMenuOpen || bGameOverScreenOpen)
+	if (bPauseMenuOpen || bGameOverScreenOpen || IsTutorialActive())
 	{
 		return;
 	}
@@ -1838,7 +1887,7 @@ void ACaveboundPlayerController::OpenBuildMenu(AActor* Slot)
 
 	if (IsInGracePeriod())
 	{
-		NotifyGraceBuildBlocked();
+		NotifyGracePhaseBlocked();
 		return;
 	}
 
@@ -2323,7 +2372,7 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 	ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>();
 	if (!GameMode || GameMode->IsRoundIdle())
 	{
-		NotifyGraceBuildBlocked();
+		NotifyGracePhaseBlocked();
 		return false;
 	}
 

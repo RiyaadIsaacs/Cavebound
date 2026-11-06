@@ -1405,13 +1405,16 @@ bool ACaveboundGameMode::CanCollectWood() const
 
 void ACaveboundGameMode::NotifyMiningBlocked()
 {
-	if (bHasShownRoundNotStartedMessage || CanCollectWood() || bGameOver)
+	if (CanCollectWood() || bGameOver)
 	{
 		return;
 	}
 
-	bHasShownRoundNotStartedMessage = true;
-	bPendingRoundNotStartedPopup = true;
+	if (ACaveboundPlayerController* PlayerController =
+		Cast<ACaveboundPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
+	{
+		PlayerController->NotifyGracePhaseBlocked();
+	}
 }
 
 // Pop up the "Round Not Started" message once, then clear it

@@ -70,7 +70,6 @@ void UCaveboundControlsPanel::NativeOnInitialized()
 	AddRow(Expanded, TEXT("F when near defender"), TEXT("Upgrade / repair"));
 	AddRow(Expanded, TEXT("Enter"), TEXT("Start next wave"));
 	AddRow(Expanded, TEXT("Esc"), TEXT("Pause"));
-	AddRow(Expanded, TEXT("Tab"), TEXT("Show / hide this card"));
 	RootBody->AddChildToVerticalBox(Expanded);
 
 	// collapsed one-liner

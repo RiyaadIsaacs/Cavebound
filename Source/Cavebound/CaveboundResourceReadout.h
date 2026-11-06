@@ -17,8 +17,11 @@ class CAVEBOUND_API UCaveboundResourceReadout : public UUserWidget
 
 public:
 	void Refresh();
-	void ShowGraceBuildTip();
-	void TickGraceTip(float DeltaTime);
+	/** Shows the grace-phase block tip (gather / build). Stays until preparation starts. */
+	void ShowGracePhaseTip();
+	void ClearGracePhaseTip();
+	/** Hides the tip once preparation / combat begins. */
+	void UpdateGracePhaseTip();
 
 	/** Absolute Y of the tree-health row center — used to align the pause button. */
 	bool GetTreeBarCenterAbsolute(FVector2D& OutCenter) const;
@@ -49,6 +52,4 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCanvasPanelSlot> PanelSlot;
-
-	float GraceTipLife = 0.f;
 };
