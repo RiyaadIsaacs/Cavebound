@@ -9,6 +9,7 @@
 
 class USplineComponent;
 class ACaveboundBossEnemy;
+class ACaveboundMapEdgeFog;
 
 // enums for the round's state
 UENUM(BlueprintType)
@@ -148,6 +149,7 @@ protected:
 	/** Move the player out if they spawned inside the tree collision. */
 	void EnsurePlayerSpawnClearOfTree();
 	void EnsureRockField();
+	void EnsureMapEdgeFog();
 	void NotifyRockDepositsWaveEnded();
 	// Guarantee concrete EnemyClass
 	void EnsureEnemySpawnConfig();
@@ -219,6 +221,9 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<ACaveboundTree> Tree;
+
+	UPROPERTY()
+	TObjectPtr<ACaveboundMapEdgeFog> MapEdgeFog;
 
 	// Path1, Path2, Path3 splines on BP_ProceduralTerrain
 	TArray<TWeakObjectPtr<USplineComponent>> PathSplines;

@@ -7,6 +7,7 @@
 #include "CaveboundLongRangeEnemy.h"
 #include "CaveboundModelOutline.h"
 #include "CaveboundPlayerController.h"
+#include "CaveboundMapEdgeFog.h"
 #include "CaveboundRockDeposit.h"
 #include "CaveboundRockField.h"
 #include "CaveboundTerrainExpansion.h"
@@ -87,6 +88,7 @@ void ACaveboundGameMode::EnsureGameplayReady()
 	CollectPathSplines();
 	EnforceBuildSlotSpacing();
 	EnsureRockField();
+	EnsureMapEdgeFog();
 }
 
 void ACaveboundGameMode::EnforceBuildSlotSpacing()
@@ -235,6 +237,39 @@ void ACaveboundGameMode::EnsureRockField()
 
 		Field->RegisterComponent();
 		Terrain->AddInstanceComponent(Field);
+	}
+}
+
+void ACaveboundGameMode::EnsureMapEdgeFog()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	if (!MapEdgeFog)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		MapEdgeFog = World->SpawnActor<ACaveboundMapEdgeFog>(
+			ACaveboundMapEdgeFog::StaticClass(),
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			Params);
+	}
+
+	if (MapEdgeFog)
+	{
+		MapEdgeFog->RefreshFromTerrain();
+		// Terrain HalfWidth is often written in BP BeginPlay — refresh again next tick.
+		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+		{
+			if (MapEdgeFog)
+			{
+				MapEdgeFog->RefreshFromTerrain();
+			}
+		}));
 	}
 }
 
@@ -919,6 +954,7 @@ int32 ACaveboundGameMode::ExpandBuildSlots()
 
 	// Paths were extended with the map — refresh cached splines for the next wave
 	CollectPathSplines();
+	EnsureMapEdgeFog();
 	return Spawned;
 }
 

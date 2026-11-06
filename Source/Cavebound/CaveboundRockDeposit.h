@@ -63,7 +63,7 @@ protected:
 	TObjectPtr<UMaterialInstanceDynamic> MineVisualMaterial;
 
 	UPROPERTY(EditAnywhere, Category = "Rock")
-	float MineRange = 220.f;
+	float MineRange = 300.f;
 
 	UPROPERTY(EditAnywhere, Category = "Rock")
 	float SecondsPerRock = 0.75f;

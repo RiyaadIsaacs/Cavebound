@@ -28,6 +28,8 @@
 #include "Materials/MaterialExpressionVectorParameter.h"
 #include "Materials/MaterialExpressionVertexNormalWS.h"
 #include "Materials/MaterialExpressionWorldPosition.h"
+#include "Materials/MaterialExpressionCustom.h"
+#include "Materials/MaterialExpressionTextureCoordinate.h"
 #endif
 
 namespace CaveboundShaderMaterials
@@ -46,6 +48,8 @@ namespace CaveboundShaderMaterials
 	// V2: sink + colour only (V1 cached a time-based crumble that kept oscillating at rest).
 	static constexpr const TCHAR* RockMinePackage = TEXT("/Game/Assets/Materials/M_RockMineDisplaceV2");
 	static constexpr const TCHAR* RockMinePath = TEXT("/Game/Assets/Materials/M_RockMineDisplaceV2.M_RockMineDisplaceV2");
+	static constexpr const TCHAR* MapEdgeFogPackage = TEXT("/Game/Assets/Materials/M_MapFogCard");
+	static constexpr const TCHAR* MapEdgeFogPath = TEXT("/Game/Assets/Materials/M_MapFogCard.M_MapFogCard");
 	static constexpr const TCHAR* TowerTexturePath = TEXT("/Game/Assets/Models/Towers/T_FortressElves.T_FortressElves");
 	static constexpr const TCHAR* RockTexturePath = TEXT("/Game/Assets/Models/Stones/Texture__1_.Texture__1_");
 
@@ -553,6 +557,92 @@ namespace CaveboundShaderMaterials
 		return Material;
 	}
 
+	static UMaterial* BuildMapEdgeFogMaterial(UObject* Outer, FName AssetName)
+	{
+		// Simple UV fog card: TexCoord.X 0 = clear (map side), 1 = solid fog (void side).
+		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
+		Material->MaterialDomain = MD_Surface;
+		Material->BlendMode = BLEND_Translucent;
+		Material->SetShadingModel(MSM_Unlit);
+		Material->TwoSided = true;
+		Material->TranslucencyLightingMode = TLM_Surface;
+		Material->bAutomaticallySetUsageInEditor = true;
+
+		UMaterialEditorOnlyData* EditorData = Material->GetEditorOnlyData();
+		if (!EditorData)
+		{
+			return Material;
+		}
+
+		UMaterialExpressionVectorParameter* FogColor = NewObject<UMaterialExpressionVectorParameter>(Material);
+		FogColor->ParameterName = TEXT("FogColor");
+		FogColor->DefaultValue = FLinearColor(0.72f, 0.75f, 0.78f, 1.f);
+		EditorData->ExpressionCollection.AddExpression(FogColor);
+
+		UMaterialExpressionScalarParameter* Density = NewObject<UMaterialExpressionScalarParameter>(Material);
+		Density->ParameterName = TEXT("Density");
+		Density->DefaultValue = 1.f;
+		EditorData->ExpressionCollection.AddExpression(Density);
+
+		UMaterialExpressionScalarParameter* Softness = NewObject<UMaterialExpressionScalarParameter>(Material);
+		Softness->ParameterName = TEXT("Softness");
+		Softness->DefaultValue = 1.6f;
+		EditorData->ExpressionCollection.AddExpression(Softness);
+
+		UMaterialExpressionTextureCoordinate* UV = NewObject<UMaterialExpressionTextureCoordinate>(Material);
+		EditorData->ExpressionCollection.AddExpression(UV);
+
+		UMaterialExpressionComponentMask* UMask = NewObject<UMaterialExpressionComponentMask>(Material);
+		UMask->R = true;
+		UMask->G = false;
+		UMask->B = false;
+		UMask->A = false;
+		EditorData->ExpressionCollection.AddExpression(UMask);
+		UMask->Input.Connect(0, UV);
+
+		UMaterialExpressionCustom* Custom = NewObject<UMaterialExpressionCustom>(Material);
+		Custom->Description = TEXT("FogCardOpacity");
+		Custom->OutputType = CMOT_Float1;
+		Custom->Code = TEXT(
+			"float T = saturate(U);\n"
+			"float Soft = max(Softness, 0.2);\n"
+			"float Mask = pow(T, Soft);\n"
+			"return saturate(Mask * Density);\n");
+		EditorData->ExpressionCollection.AddExpression(Custom);
+
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("U");
+			UMask->ConnectExpression(&In.Input, 0);
+		}
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("Density");
+			Density->ConnectExpression(&In.Input, 0);
+		}
+		{
+			FCustomInput& In = Custom->Inputs.AddDefaulted_GetRef();
+			In.InputName = TEXT("Softness");
+			Softness->ConnectExpression(&In.Input, 0);
+		}
+
+		Custom->ConnectExpression(&EditorData->Opacity, 0);
+
+		UMaterialExpressionComponentMask* ColorRGB = NewObject<UMaterialExpressionComponentMask>(Material);
+		ColorRGB->R = true;
+		ColorRGB->G = true;
+		ColorRGB->B = true;
+		ColorRGB->A = false;
+		EditorData->ExpressionCollection.AddExpression(ColorRGB);
+		ColorRGB->Input.Connect(0, FogColor);
+
+		ColorRGB->ConnectExpression(&EditorData->EmissiveColor, 0);
+		ColorRGB->ConnectExpression(&EditorData->BaseColor, 0);
+
+		FinalizeMaterial(Material);
+		return Material;
+	}
+
 	static UMaterial* BuildHoverOutlineMaterial(UObject* Outer, FName AssetName)
 	{
 		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
@@ -744,6 +834,19 @@ namespace CaveboundShaderMaterials
 #endif
 	}
 
+	UMaterialInterface* GetMapEdgeFogMaterial()
+	{
+#if WITH_EDITORONLY_DATA
+		return EnsureContentMaterial(
+			MapEdgeFogPath,
+			MapEdgeFogPackage,
+			TEXT("M_MapFogCard"),
+			[](UObject* Outer, FName Name) { return BuildMapEdgeFogMaterial(Outer, Name); });
+#else
+		return LoadObject<UMaterialInterface>(nullptr, MapEdgeFogPath);
+#endif
+	}
+
 	UMaterialInstanceDynamic* CreatePoisonPulseMID(UObject* Outer)
 	{
 		UMaterialInterface* Parent = GetPoisonPulseMaterial();
@@ -797,6 +900,16 @@ namespace CaveboundShaderMaterials
 	UMaterialInstanceDynamic* CreateRockMineDisplaceMID(UObject* Outer)
 	{
 		UMaterialInterface* Parent = GetRockMineDisplaceMaterial();
+		if (!Parent || !Outer)
+		{
+			return nullptr;
+		}
+		return UMaterialInstanceDynamic::Create(Parent, Outer);
+	}
+
+	UMaterialInstanceDynamic* CreateMapEdgeFogMID(UObject* Outer)
+	{
+		UMaterialInterface* Parent = GetMapEdgeFogMaterial();
 		if (!Parent || !Outer)
 		{
 			return nullptr;
