@@ -14,7 +14,9 @@
 namespace WaveCountdownHud
 {
 	constexpr float Edge = 24.f;
-	constexpr int32 FontSize = 18;
+	constexpr float CardWidth = 560.f;
+	constexpr int32 TitleFont = 18;
+	constexpr int32 BodyFont = 16;
 }
 
 void UCaveboundWaveCountdown::NativeOnInitialized()
@@ -43,9 +45,9 @@ void UCaveboundWaveCountdown::NativeOnInitialized()
 	TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("WaveTitle"));
 	TitleText->SetText(FText::FromString(TEXT("Grace Period")));
 	TitleText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
-	TitleText->SetFont(CaveboundUIStyle::Font(WaveCountdownHud::FontSize));
+	TitleText->SetFont(CaveboundUIStyle::Font(WaveCountdownHud::TitleFont));
 	TitleText->SetJustification(ETextJustify::Center);
-	TitleText->SetAutoWrapText(true);
+	TitleText->SetAutoWrapText(false);
 	TitleText->SetShadowColorAndOpacity(FLinearColor(0.12f, 0.08f, 0.06f, 0.5f));
 	TitleText->SetShadowOffset(FVector2D(1.f, 1.f));
 	if (UVerticalBoxSlot* TitleSlot = Body->AddChildToVerticalBox(TitleText))
@@ -55,18 +57,18 @@ void UCaveboundWaveCountdown::NativeOnInitialized()
 	}
 
 	TimeText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("WaveTime"));
-	TimeText->SetText(FText::FromString(TEXT("Start new wave to enter preparation phase")));
+	TimeText->SetText(FText::FromString(TEXT("Press New Wave to begin preparation")));
 	TimeText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
-	TimeText->SetFont(CaveboundUIStyle::Font(WaveCountdownHud::FontSize));
+	TimeText->SetFont(CaveboundUIStyle::Font(WaveCountdownHud::BodyFont));
 	TimeText->SetJustification(ETextJustify::Center);
-	TimeText->SetAutoWrapText(true);
+	TimeText->SetAutoWrapText(false);
 	if (UVerticalBoxSlot* TimeSlot = Body->AddChildToVerticalBox(TimeText))
 	{
 		TimeSlot->SetHorizontalAlignment(HAlign_Center);
 	}
 
 	USizeBox* Size = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("WaveSize"));
-	Size->SetMinDesiredWidth(420.f);
+	Size->SetWidthOverride(WaveCountdownHud::CardWidth);
 	Size->SetContent(Frame);
 
 	PanelSlot = Canvas->AddChildToCanvas(Size);
@@ -92,7 +94,7 @@ void UCaveboundWaveCountdown::Refresh()
 	if (!GameMode)
 	{
 		TitleText->SetText(FText::FromString(TEXT("Grace Period")));
-		TimeText->SetText(FText::FromString(TEXT("Start new wave to enter preparation phase")));
+		TimeText->SetText(FText::FromString(TEXT("Press New Wave to begin preparation")));
 		return;
 	}
 
@@ -107,8 +109,8 @@ void UCaveboundWaveCountdown::Refresh()
 		break;
 	}
 	case ECaveboundRoundState::Combat:
-		TitleText->SetText(FText::FromString(TEXT("Combat")));
-		TimeText->SetText(FText::FromString(TEXT("Wave in progress")));
+		TitleText->SetText(FText::FromString(TEXT("Combat Phase")));
+		TimeText->SetText(FText::FromString(TEXT("Defend the tree of life")));
 		break;
 	case ECaveboundRoundState::GameOver:
 		TitleText->SetText(FText::FromString(TEXT("Game Over")));
@@ -117,7 +119,7 @@ void UCaveboundWaveCountdown::Refresh()
 	case ECaveboundRoundState::Idle:
 	default:
 		TitleText->SetText(FText::FromString(TEXT("Grace Period")));
-		TimeText->SetText(FText::FromString(TEXT("Start new wave to enter preparation phase")));
+		TimeText->SetText(FText::FromString(TEXT("Press New Wave to begin preparation")));
 		break;
 	}
 }
