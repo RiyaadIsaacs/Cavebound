@@ -1518,4 +1518,10 @@ void ACaveboundGameMode::HandleTreeDestroyed()
 			}
 		}
 	}
+
+	if (ACaveboundPlayerController* PlayerController =
+		Cast<ACaveboundPlayerController>(UGameplayStatics::GetPlayerController(World, 0)))
+	{
+		PlayerController->ShowGameOverScreen();
+	}
 }

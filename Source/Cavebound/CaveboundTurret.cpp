@@ -13,6 +13,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
+// reads wood cost from C++ class defaults (skips BP-only classes)
 int32 ACaveboundTurret::GetCostForClass(TSubclassOf<AActor> DefenderClass)
 {
 	UClass* Class = DefenderClass.Get();
@@ -32,6 +33,7 @@ int32 ACaveboundTurret::GetCostForClass(TSubclassOf<AActor> DefenderClass)
 	return 0;
 }
 
+// stores level-0 stats once for upgrade scaling
 void ACaveboundTurret::RememberBaseStats()
 {
 	if (bBaseStatsSaved)
@@ -46,6 +48,7 @@ void ACaveboundTurret::RememberBaseStats()
 	bBaseStatsSaved = true;
 }
 
+// sets the three upgrade-level tower meshes
 void ACaveboundTurret::UseTowerMeshes(UStaticMesh* Level1, UStaticMesh* Level2, UStaticMesh* Level3, UStaticMesh* Fallback)
 {
 	UpgradeMeshes.Reset();
@@ -69,6 +72,7 @@ void ACaveboundTurret::UseTowerMeshes(UStaticMesh* Level1, UStaticMesh* Level2, 
 	ApplyUpgradeMesh();
 }
 
+// swaps visual mesh for the current upgrade level
 void ACaveboundTurret::ApplyUpgradeMesh()
 {
 	if (!VisualMesh || UpgradeMeshes.Num() == 0)
@@ -82,7 +86,7 @@ void ACaveboundTurret::ApplyUpgradeMesh()
 		VisualMesh->SetStaticMesh(UpgradeMeshes[index]);
 	}
 
-	// Mesh swap clears slot materials — reapply the damage displace MID once we are in-world.
+	// mesh swap clears materials — reapply damage MID + outline in-world
 	DamageVisualMaterial = nullptr;
 	if (GetWorld())
 	{
@@ -92,6 +96,7 @@ void ACaveboundTurret::ApplyUpgradeMesh()
 	}
 }
 
+// scales hp / fire rate / damage from upgrade level
 void ACaveboundTurret::ApplyLevelBonus()
 {
 	const float growth = 1.f + UpgradeLevel * 0.4f;
@@ -104,6 +109,7 @@ void ACaveboundTurret::ApplyLevelBonus()
 	UpdateDamageVisuals();
 }
 
+// creates the tower damage-displace MID on the mesh
 void ACaveboundTurret::EnsureDamageVisualMaterial()
 {
 	if (!VisualMesh)
@@ -124,6 +130,7 @@ void ACaveboundTurret::EnsureDamageVisualMaterial()
 	}
 }
 
+// drives damage shader from current health ratio
 void ACaveboundTurret::UpdateDamageVisuals()
 {
 	EnsureDamageVisualMaterial();
@@ -135,11 +142,11 @@ void ACaveboundTurret::UpdateDamageVisuals()
 	const float HealthRatio = (MaxHealth > KINDA_SMALL_NUMBER)
 		? FMath::Clamp(Health / MaxHealth, 0.f, 1.f)
 		: 0.f;
-	// Full missing-health curve drives vertex displacement.
+	// missing-health curve drives vertex displacement
 	const float DamageAmount = 1.f - HealthRatio;
 	DamageVisualMaterial->SetScalarParameterValue(TEXT("DamageAmount"), DamageAmount);
 
-	// Base colour tint only starts once health drops to 50% or below.
+	// colour tint only starts once health drops to 50% or below
 	const float ColourDamageAmount = (HealthRatio >= 0.5f)
 		? 0.f
 		: FMath::Clamp((0.5f - HealthRatio) / 0.5f, 0.f, 1.f);
@@ -202,6 +209,7 @@ void ACaveboundTurret::GetDisarmRefund(int32& OutWood, int32& OutRock) const
 	}
 }
 
+// spends upgrade resources without applying the level yet
 bool ACaveboundTurret::CommitUpgradePurchase(ACaveboundGameMode* GameMode)
 {
 	if (!GameMode || IsDestroyed() || UpgradeLevel >= 2)
@@ -232,6 +240,7 @@ bool ACaveboundTurret::CommitUpgradePurchase(ACaveboundGameMode* GameMode)
 	return true;
 }
 
+// applies the paid upgrade level + mesh / stats
 void ACaveboundTurret::ApplyCommittedUpgrade()
 {
 	if (IsDestroyed() || UpgradeLevel >= 2)
@@ -254,6 +263,7 @@ bool ACaveboundTurret::TryUpgrade(ACaveboundGameMode* GameMode)
 	return true;
 }
 
+// spends wood to restore full health
 bool ACaveboundTurret::TryRepair(ACaveboundGameMode* GameMode)
 {
 	const int32 repairCost = GetRepairCost();
@@ -279,6 +289,7 @@ ACaveboundTurret::ACaveboundTurret()
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
 
+	// archer tower mesh + collision
 	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
 	VisualMesh->SetupAttachment(SceneRoot);
 	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
@@ -334,6 +345,7 @@ void ACaveboundTurret::BeginPlay()
 	CaveboundModelOutline::ApplyToActor(this);
 }
 
+// aims and fires during combat rounds
 void ACaveboundTurret::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -382,9 +394,9 @@ void ACaveboundTurret::ApplyDamage(float Amount)
 	}
 }
 
+// creates and plays hit flash on tower meshes
 void ACaveboundTurret::PlayDamageFlash()
 {
-	//Enemy flash
 	TArray<UStaticMeshComponent*> meshList;
 	GetComponents<UStaticMeshComponent>(meshList);
 	FCaveboundDamageFlash::FlashMeshes(this, meshList, HitFlashTimer, HitFlashColor, HitFlashDuration);
@@ -395,6 +407,7 @@ void ACaveboundTurret::OnDestroyedByDamage()
 	Destroy();
 }
 
+// finds nearest living enemy in attack range
 ACaveboundBaseEnemy* ACaveboundTurret::FindNearestEnemy() const
 {
 	UWorld* world = GetWorld();
@@ -429,6 +442,7 @@ ACaveboundBaseEnemy* ACaveboundTurret::FindNearestEnemy() const
 	return closestEnemy;
 }
 
+// caches a Fire* arrow component as the shot origin
 void ACaveboundTurret::RememberFirePoint()
 {
 	TArray<UArrowComponent*> arrows;
@@ -490,6 +504,7 @@ float ACaveboundTurret::GetYawErrorToEnemy(const ACaveboundBaseEnemy* enemy) con
 	return FMath::FindDeltaAngleDegrees(shotForward.Rotation().Yaw, toEnemy.Rotation().Yaw);
 }
 
+// rotates yaw toward the current target
 void ACaveboundTurret::TurnTowardEnemy(const ACaveboundBaseEnemy* enemy, float DeltaTime)
 {
 	if (!enemy)
@@ -505,6 +520,7 @@ void ACaveboundTurret::TurnTowardEnemy(const ACaveboundBaseEnemy* enemy, float D
 	SetActorRotation(rotation);
 }
 
+// spawns a projectile once aimed close enough
 bool ACaveboundTurret::TryFireAtEnemy(ACaveboundBaseEnemy* closestEnemy)
 {
 	UWorld* world = GetWorld();
@@ -513,7 +529,7 @@ bool ACaveboundTurret::TryFireAtEnemy(ACaveboundBaseEnemy* closestEnemy)
 		return false;
 	}
 
-	// Hold the shot until the enemy is within 45 degrees of the fire point.
+	// holds the shot until the enemy is within aim cone
 	if (FMath::Abs(GetYawErrorToEnemy(closestEnemy)) > AimHalfAngle)
 	{
 		return false;
@@ -530,7 +546,6 @@ bool ACaveboundTurret::TryFireAtEnemy(ACaveboundBaseEnemy* closestEnemy)
 	spawnSettings.Owner = this;
 	spawnSettings.Instigator = GetInstigator();
 
-	// Spawn the projectile
 	if (AActor* spawnedArrow = world->SpawnActor<AActor>(ProjectileClass, arrowSpawnPoint, aimDirection, spawnSettings))
 	{
 		TArray<UPrimitiveComponent*> arrowParts;

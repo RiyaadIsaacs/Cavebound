@@ -14,7 +14,7 @@ ACaveboundSnare::ACaveboundSnare()
 {
 	bAutoFire = false;
 
-	// Match every other defender: fortress tower mesh + shared scale/pivot.
+	// fortress tower mesh + shared scale / pivot
 	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
@@ -31,7 +31,7 @@ ACaveboundSnare::ACaveboundSnare()
 		level3Mesh.Succeeded() ? level3Mesh.Object : nullptr,
 		level1Mesh.Succeeded() ? level1Mesh.Object : nullptr);
 
-	// Cylinder is only the thin rope spline mesh — never the tower visual.
+	// cylinder is only the thin rope spline mesh — never the tower visual
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> cylinderMesh(
 		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	if (cylinderMesh.Succeeded())
@@ -50,7 +50,7 @@ ACaveboundSnare::ACaveboundSnare()
 		}
 	}
 
-	// Rope attaches near the top of the scaled tower (same ballpark as other fire points).
+	// rope attaches near the top of the scaled tower
 	PostHeight = 220.f;
 
 	Cost = 70;
@@ -64,6 +64,7 @@ void ACaveboundSnare::BeginPlay()
 	AlignDefenderTransform();
 }
 
+// keeps tower mesh at the shared defender scale / pivot
 void ACaveboundSnare::AlignDefenderTransform()
 {
 	if (!VisualMesh)
@@ -78,12 +79,13 @@ void ACaveboundSnare::AlignDefenderTransform()
 
 void ACaveboundSnare::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Lets the enemy move again and removes the rope.
+	// lets snared enemies move again and removes ropes
 	DropCatch();
 
 	Super::EndPlay(EndPlayReason);
 }
 
+// releases every held enemy and clears ropes
 void ACaveboundSnare::DropCatch()
 {
 	for (FCaveboundSnareHold& hold : Holds)
@@ -97,6 +99,7 @@ void ACaveboundSnare::DropCatch()
 	Holds.Empty();
 }
 
+// releases one enemy if this snare is holding it
 void ACaveboundSnare::ReleaseEnemy(ACaveboundBaseEnemy* Enemy)
 {
 	for (int32 index = Holds.Num() - 1; index >= 0; --index)
@@ -130,6 +133,7 @@ void ACaveboundSnare::Tick(float DeltaTime)
 		return;
 	}
 
+	// drops dead / expired holds
 	for (int32 index = Holds.Num() - 1; index >= 0; --index)
 	{
 		ACaveboundBaseEnemy* heldEnemy = Holds[index].Enemy.Get();
@@ -164,6 +168,7 @@ bool ACaveboundSnare::IsCombatRound() const
 	return !gameMode || gameMode->GetRoundState() == ECaveboundRoundState::Combat;
 }
 
+// catches more enemies until the hold limit is full
 void ACaveboundSnare::UpdateSnare()
 {
 	while (Holds.Num() < GetCatchLimit())
@@ -194,6 +199,7 @@ bool ACaveboundSnare::IsHolding(const ACaveboundBaseEnemy* Enemy) const
 	return false;
 }
 
+// finds nearest snareable enemy in catch range
 ACaveboundBaseEnemy* ACaveboundSnare::FindSnareTarget() const
 {
 	UWorld* world = GetWorld();
@@ -228,6 +234,7 @@ ACaveboundBaseEnemy* ACaveboundSnare::FindSnareTarget() const
 	return closestEnemy;
 }
 
+// destroys rope spline pieces for one hold
 void ACaveboundSnare::ClearHold(FCaveboundSnareHold& Hold)
 {
 	for (USplineMeshComponent* ropePiece : Hold.Pieces)
@@ -254,6 +261,7 @@ void ACaveboundSnare::ClearAllRopes()
 	}
 }
 
+// builds a rope from the post top down around the caught enemy
 void ACaveboundSnare::ShowRope(FCaveboundSnareHold& Hold)
 {
 	ClearHold(Hold);
@@ -276,6 +284,7 @@ void ACaveboundSnare::ShowRope(FCaveboundSnareHold& Hold)
 	ropePoints.Add(FMath::Lerp(postTop, aboveEnemy, 0.5f));
 	ropePoints.Add(aboveEnemy);
 
+	// wraps the rope around the enemy body
 	const int wraps = 3;
 	const int stepsPerWrap = 8;
 	const float wrapRadius = 80.f;
@@ -298,6 +307,7 @@ void ACaveboundSnare::ShowRope(FCaveboundSnareHold& Hold)
 	}
 	Hold.Spline->UpdateSpline();
 
+	// creates one thin cylinder piece per spline segment
 	const float ropeThickness = 0.08f;
 	const int pointCount = Hold.Spline->GetNumberOfSplinePoints();
 	for (int pointIndex = 0; pointIndex < pointCount - 1; ++pointIndex)

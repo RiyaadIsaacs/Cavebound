@@ -25,6 +25,7 @@
 
 void UCaveboundBuildChoiceProxy::HandleClicked()
 {
+	// forwards the button click to the menu
 	if (Menu)
 	{
 		Menu->SelectDefender(DefenderClass);
@@ -42,6 +43,7 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 
 	SetVisibility(ESlateVisibility::Visible);
 
+	// builds the place-defender panel layout
 	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("BuildMenuCanvas"));
 	Canvas->SetVisibility(ESlateVisibility::Visible);
 	WidgetTree->RootWidget = Canvas;
@@ -65,6 +67,7 @@ void UCaveboundBuildMenu::NativeOnInitialized()
 		TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	}
 
+	// resource readout
 	WoodText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildMenuWood"));
 	WoodText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
 	WoodText->SetFont(CaveboundUIStyle::Font(14));
@@ -104,7 +107,7 @@ void UCaveboundBuildMenu::SetHoverScreenPosition(FVector2D Position)
 		return;
 	}
 
-	// Alignment is bottom-center of the menu.
+	// pins bottom-center of the menu above the slot, clamped to screen
 	FVector2D MenuSize = FrameWidget
 		? FrameWidget->GetCachedGeometry().GetLocalSize()
 		: FVector2D(320.f, 420.f);
@@ -152,6 +155,7 @@ void UCaveboundBuildMenu::OpenForSlot(AActor* BuildSlot)
 		StatusText->SetText(FText::GetEmpty());
 	}
 
+	// refreshes wood / rock counts
 	int32 Wood = 0;
 	int32 Rock = 0;
 	if (ACaveboundGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACaveboundGameMode>() : nullptr)
@@ -170,6 +174,7 @@ void UCaveboundBuildMenu::OpenForSlot(AActor* BuildSlot)
 	}
 	ChoiceProxies.Reset();
 
+	// adds one button per placeable defender
 	if (UClass* TurretClass = LoadClass<AActor>(nullptr, TEXT("/Game/Blueprints/BP_Turret.BP_Turret_C")))
 	{
 		AddChoice(TEXT("Turret"), TurretClass);
@@ -205,6 +210,7 @@ void UCaveboundBuildMenu::AddChoice(const FString& Label, TSubclassOf<AActor> De
 
 	const int32 Cost = ACaveboundTurret::GetCostForClass(DefenderClass);
 
+	// builds a labeled cost button for one defender type
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
 	CaveboundUIStyle::ApplyRectButtonStyle(Button);
 
@@ -265,6 +271,7 @@ void UCaveboundBuildMenu::SelectDefender(TSubclassOf<AActor> DefenderClass)
 		return;
 	}
 
+	// places the defender or shows an error
 	if (!Controller->PlaceDefenderAtSlot(BuildSlot, DefenderClass))
 	{
 		if (StatusText)

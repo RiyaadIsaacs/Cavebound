@@ -36,6 +36,7 @@ namespace
 	constexpr float DefaultColorBoost = 1.1f;
 
 #if WITH_EDITORONLY_DATA
+	// builds the post-process screen FX material graph in editor
 	UMaterial* BuildVignetteMaterial(UObject* Outer, FName AssetName)
 	{
 		UMaterial* Material = NewObject<UMaterial>(Outer, AssetName, RF_Public | RF_Standalone);
@@ -82,6 +83,7 @@ namespace
 		ColorBoostParam->DefaultValue = DefaultColorBoost;
 		EditorData->ExpressionCollection.AddExpression(ColorBoostParam);
 
+		// HLSL: edge tint, darken, saturation boost
 		UMaterialExpressionCustom* Custom = NewObject<UMaterialExpressionCustom>(Material);
 		Custom->Description = TEXT("CaveboundScreenFXV4");
 		Custom->OutputType = CMOT_Float3;
@@ -177,6 +179,7 @@ namespace
 #endif // WITH_EDITORONLY_DATA
 }
 
+// loads the screen FX asset, or builds one in editor if missing
 UMaterialInterface* UCaveboundDamageVignette::GetOrBuildMaterial()
 {
 	if (UMaterialInterface* Existing = LoadObject<UMaterialInterface>(nullptr, VignettePath))
@@ -208,6 +211,7 @@ UMaterialInterface* UCaveboundDamageVignette::GetOrBuildMaterial()
 #endif
 }
 
+// finds or spawns the unbound PP volume that hosts the MID
 void UCaveboundDamageVignette::BindToWorld(UWorld* World)
 {
 	if (!World || !VignetteMID)
@@ -260,6 +264,7 @@ void UCaveboundDamageVignette::BindToWorld(UWorld* World)
 	}
 }
 
+// ensures MID + volume exist and params match current state
 void UCaveboundDamageVignette::Ensure(UWorld* World)
 {
 	if (!VignetteMID)
@@ -290,6 +295,7 @@ void UCaveboundDamageVignette::Ensure(UWorld* World)
 	ApplyDarken();
 }
 
+// writes edge strength / tint into the MID
 void UCaveboundDamageVignette::ApplyVignetteParams(float Strength)
 {
 	if (!VignetteMID)
@@ -300,6 +306,7 @@ void UCaveboundDamageVignette::ApplyVignetteParams(float Strength)
 	VignetteMID->SetVectorParameterValue(TintParamName, ActiveTint);
 }
 
+// writes tree-health screen darken into the MID
 void UCaveboundDamageVignette::ApplyDarken()
 {
 	if (VignetteMID)
@@ -308,13 +315,14 @@ void UCaveboundDamageVignette::ApplyDarken()
 	}
 }
 
+// starts a colored edge pulse (damage outranks collect pulses)
 void UCaveboundDamageVignette::Pulse(
 	ECaveboundVignetteKind Kind,
 	const FLinearColor& Tint,
 	float Strength,
 	float InDuration)
 {
-	// Red damage outranks collect pulses while it is still fading.
+	// red damage outranks collect pulses while still fading
 	if (bActive
 		&& ActiveKind == ECaveboundVignetteKind::Damage
 		&& Kind != ECaveboundVignetteKind::Damage)
@@ -346,6 +354,7 @@ void UCaveboundDamageVignette::PulseRock(float Strength, float InDuration)
 	Pulse(ECaveboundVignetteKind::Rock, FLinearColor(0.62f, 0.62f, 0.66f, 1.f), Strength, InDuration);
 }
 
+// maps sacred-tree health into screen darken amount
 void UCaveboundDamageVignette::SetTreeHealthFraction(float HealthFrac)
 {
 	const float Clamped = FMath::Clamp(HealthFrac, 0.f, 1.f);
@@ -353,6 +362,7 @@ void UCaveboundDamageVignette::SetTreeHealthFraction(float HealthFrac)
 	ApplyDarken();
 }
 
+// eases the active pulse strength down to zero
 void UCaveboundDamageVignette::TickFade(float DeltaTime)
 {
 	if (!bActive)

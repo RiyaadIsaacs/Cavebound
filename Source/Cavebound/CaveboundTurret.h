@@ -138,7 +138,7 @@ protected:
 
 	float FireTime = 0.f;
 
-	// 0 is the tower you place. 1 and 2 are the two upgrades.
+	// 0 is the base tower. 1 and 2 are the two upgrades.
 	int32 UpgradeLevel = 0;
 	float BaseMaxHealth = 150.f;
 	float BaseFireInterval = 1.f;

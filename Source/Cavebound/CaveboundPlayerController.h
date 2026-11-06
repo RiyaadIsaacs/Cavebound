@@ -17,6 +17,13 @@ class UCaveboundHoverInfo;
 class UCaveboundEmptyCursor;
 class UCaveboundDamageVignette;
 class UCaveboundResourceReadout;
+class UCaveboundControlsPanel;
+class UCaveboundWaveCountdown;
+class UCaveboundPauseButton;
+class UCaveboundPauseMenu;
+class UCaveboundGameOverScreen;
+class UCaveboundScreenFade;
+class UCaveboundGameplayHud;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class ACaveboundTurret;
@@ -67,6 +74,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Cavebound|Pause")
 	void QuitGame();
 
+	/** Reloads the current level (pause / game over Restart). */
+	UFUNCTION(BlueprintCallable, Category = "Cavebound|Pause")
+	void RestartMatch();
+
+	/** Shows the game-over overlay after the tree dies. */
+	void ShowGameOverScreen();
+
 	// B at a free build slot opens the defender picker. The choice calls this.
 	bool PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<AActor> DefenderClass);
 
@@ -102,6 +116,12 @@ protected:
 	void CreateSkipCountdownButton();
 	void UpdateSkipCountdownButton();
 	void CreateSpeedButtons();
+	/** Lifts New Wave above the speed row and right-aligns controls to that cluster. */
+	void AlignRightSideUI();
+	void AlignTopHud();
+	void ToggleControlsPanel();
+	bool IsInGracePeriod() const;
+	void NotifyGraceBuildBlocked();
 	void SetGameSpeed(float Speed);
 	void RefreshSpeedButtonStyles();
 	void UpdateHoverInfoWidget();
@@ -153,7 +173,7 @@ protected:
 	UFUNCTION()
 	void HandlePlacedDefenderDestroyed(AActor* DestroyedActor);
 
-	// For assigning HUD 
+	/** Unused — WBP_PlayerHUD is disabled; C++ GameplayHud is created instead. */
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> HUDWidgetClass;
 
@@ -186,12 +206,20 @@ protected:
 
 	float GameSpeed = 1.f;
 
-	// Separate from WBP_PlayerHUD so pause can block input without breaking click-to-move
+	/** Unused — WBP_PauseMenu is disabled; C++ CaveboundPauseMenu is created instead. */
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> PauseMenuWidgetClass;
 
 	UPROPERTY()
-	TObjectPtr<UUserWidget> PauseMenuWidget;
+	TObjectPtr<UCaveboundPauseMenu> PauseMenuWidget;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundGameOverScreen> GameOverScreen;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundScreenFade> ScreenFade;
+
+	bool bGameOverScreenOpen = false;
 
 	// Line-trace under the cursor and send that world point to the Character
 	void OnClickMove();
@@ -218,6 +246,15 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundResourceReadout> RockReadout;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundWaveCountdown> WaveCountdown;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundPauseButton> PauseButtonWidget;
+
+	UPROPERTY()
+	TObjectPtr<UCaveboundControlsPanel> ControlsPanel;
 
 	UPROPERTY()
 	TObjectPtr<UCaveboundHoverInfo> HoverInfo;

@@ -14,7 +14,7 @@ ACaveboundMoveMarker::ACaveboundMoveMarker()
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
-	// Two flat discs, offset in pulse, read as a ring.
+	// two flat discs that pulse as a move-order ring
 	Outer = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Outer"));
 	Outer->SetupAttachment(Root);
 	Outer->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -47,6 +47,7 @@ ACaveboundMoveMarker::ACaveboundMoveMarker()
 	SetActorEnableCollision(false);
 }
 
+// shows the ring at a ground click location
 void ACaveboundMoveMarker::ShowAt(const FVector& WorldLocation)
 {
 	SetActorLocation(WorldLocation + FVector(0.f, 0.f, GroundOffset));
@@ -82,7 +83,7 @@ void ACaveboundMoveMarker::Hide()
 
 void ACaveboundMoveMarker::UpdatePulse(float Amount)
 {
-	// Outer grows as Inner shrinks so it reads as a ring, not a solid disc.
+	// outer grows as inner shrinks so it reads as a ring
 	const float OuterScale = FMath::Lerp(0.85f, 1.25f, Amount);
 	const float InnerScale = FMath::Lerp(1.15f, 0.7f, Amount);
 	const float R = Radius / 50.f;
@@ -112,6 +113,7 @@ void ACaveboundMoveMarker::UpdatePulse(float Amount)
 	}
 }
 
+// drives the ring pulse while visible
 void ACaveboundMoveMarker::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);

@@ -4,6 +4,7 @@
 
 ACaveboundSentry::ACaveboundSentry()
 {
+	// ballista tower mesh + transform
 	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
@@ -18,6 +19,7 @@ ACaveboundSentry::ACaveboundSentry()
 		level3Mesh.Succeeded() ? level3Mesh.Object : nullptr,
 		fallbackMesh.Succeeded() ? fallbackMesh.Object : nullptr);
 
+	// fast low-damage ballista bolts
 	ProjectileClass = ACaveboundBallistaShell::StaticClass();
 	FirePointOffset = FVector(70.f, 0.f, 240.f);
 

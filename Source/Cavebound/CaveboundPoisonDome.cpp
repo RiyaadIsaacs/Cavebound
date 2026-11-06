@@ -13,8 +13,7 @@ ACaveboundPoisonDome::ACaveboundPoisonDome()
 {
 	bAutoFire = false;
 
-	// Poison tower in place of the old cone. The file is about 15 meters tall, so scale it down.
-	// Pivot is already on the ground, so it does not need a flip or a height offset.
+	// poison tower mesh — pivot already on the ground
 	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
@@ -29,7 +28,7 @@ ACaveboundPoisonDome::ACaveboundPoisonDome()
 		level3Mesh.Succeeded() ? level3Mesh.Object : nullptr,
 		fallbackMesh.Succeeded() ? fallbackMesh.Object : nullptr);
 
-	// Transparent dome
+	// transparent poison cloud sphere
 	PoisonCloud = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PoisonCloud"));
 	PoisonCloud->SetupAttachment(SceneRoot);
 	PoisonCloud->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -64,9 +63,11 @@ void ACaveboundPoisonDome::BeginPlay()
 void ACaveboundPoisonDome::ApplyLevelBonus()
 {
 	Super::ApplyLevelBonus();
+	// scales poison dps with upgrade level
 	PoisonDamagePerSecond = BasePoisonDamage * (1.f + UpgradeLevel * 0.4f);
 }
 
+// creates and plays hit flash on the tower mesh only
 void ACaveboundPoisonDome::PlayDamageFlash()
 {
 	TArray<UStaticMeshComponent*> tower;
@@ -106,7 +107,7 @@ bool ACaveboundPoisonDome::IsCombatRound() const
 	return !gameMode || gameMode->GetRoundState() == ECaveboundRoundState::Combat;
 }
 
-// Updates cloud size and assigns the pulsing two-green poison shader.
+// updates cloud size and assigns the pulsing poison shader
 void ACaveboundPoisonDome::UpdatePoisonCloud()
 {
 	if (!PoisonCloud)
@@ -131,7 +132,7 @@ void ACaveboundPoisonDome::UpdatePoisonCloud()
 	PoisonCloud->SetRelativeLocation(FVector::ZeroVector);
 }
 
-// Enemy effects
+// slows and ticks poison damage on enemies inside the dome
 void ACaveboundPoisonDome::UpdateDome(float DeltaTime)
 {
 	UWorld* world = GetWorld();
@@ -171,6 +172,7 @@ void ACaveboundPoisonDome::UpdateDome(float DeltaTime)
 		}
 	}
 
+	// drops timers for enemies that left the dome
 	for (auto savedEnemy = PoisonTimeRemaining.CreateIterator(); savedEnemy; ++savedEnemy)
 	{
 		if (!enemiesInsideDome.Contains(savedEnemy.Key()))

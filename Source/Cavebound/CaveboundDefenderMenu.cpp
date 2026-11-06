@@ -21,6 +21,7 @@
 
 void UCaveboundDefenderActionProxy::HandleClicked()
 {
+	// forwards the button click to the menu
 	if (Menu)
 	{
 		Menu->HandleAction(Action);
@@ -38,6 +39,7 @@ void UCaveboundDefenderMenu::NativeOnInitialized()
 
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
+	// builds the upgrade / repair / disarm panel layout
 	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("DefenderMenuCanvas"));
 	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	WidgetTree->RootWidget = Canvas;
@@ -94,6 +96,7 @@ void UCaveboundDefenderMenu::SetHoverScreenPosition(FVector2D Position)
 		return;
 	}
 
+	// pins bottom-center of the menu above the slot, clamped to screen
 	FVector2D MenuSize = FrameWidget
 		? FrameWidget->GetCachedGeometry().GetLocalSize()
 		: FVector2D(280.f, 260.f);
@@ -139,6 +142,7 @@ void UCaveboundDefenderMenu::OpenForDefender(AActor* BuildSlot, ACaveboundTurret
 		StatusText->SetText(FText::GetEmpty());
 	}
 
+	// refreshes resources and title
 	int32 Wood = 0;
 	int32 Rock = 0;
 	if (ACaveboundGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ACaveboundGameMode>() : nullptr)
@@ -170,6 +174,7 @@ void UCaveboundDefenderMenu::OpenForDefender(AActor* BuildSlot, ACaveboundTurret
 		return;
 	}
 
+	// upgrade / repair / disarm action buttons
 	if (Defender->GetUpgradeLevel() >= Defender->GetMaxUpgradeLevel())
 	{
 		AddAction(TEXT("Upgrade"), TEXT("Max"), 0);
@@ -208,6 +213,7 @@ void UCaveboundDefenderMenu::AddAction(const FString& Label, const FString& Deta
 		return;
 	}
 
+	// builds one action row button
 	UButton* Button = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
 	CaveboundUIStyle::ApplyRectButtonStyle(Button);
 
@@ -267,6 +273,7 @@ void UCaveboundDefenderMenu::HandleAction(int32 Action)
 		return;
 	}
 
+	// runs the chosen action; closes on disarm, else refreshes costs
 	FString Failure;
 	const bool bOk = Controller->UseDefenderAction(BuildSlot, Action, Failure);
 	if (!bOk)

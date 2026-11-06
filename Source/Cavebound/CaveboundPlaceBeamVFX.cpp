@@ -20,14 +20,14 @@ ACaveboundPlaceBeamVFX::ACaveboundPlaceBeamVFX()
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
-	// Tall cylinder = the beam body.
+	// tall cylinder = the beam body
 	BeamMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BeamMesh"));
 	BeamMesh->SetupAttachment(Root);
 	BeamMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BeamMesh->SetCastShadow(false);
 	BeamMesh->SetReceivesDecals(false);
 
-	// Sphere flash at the end of the cast.
+	// sphere flash at the end of the cast
 	PopMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PopMesh"));
 	PopMesh->SetupAttachment(Root);
 	PopMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -83,6 +83,7 @@ FLinearColor ACaveboundPlaceBeamVFX::ColorForUpgrade(int32 NextUpgradeLevel)
 	return FLinearColor(0.25f, 0.9f, 1.f, 1.f); // cyan — 1st upgrade
 }
 
+// creates and plays place / upgrade beam at a slot
 ACaveboundPlaceBeamVFX* ACaveboundPlaceBeamVFX::SpawnAt(
 	UWorld* World,
 	const FVector& Location,
@@ -180,6 +181,7 @@ void ACaveboundPlaceBeamVFX::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+// locks defender look and starts hologram fade-in
 void ACaveboundPlaceBeamVFX::StartReveal()
 {
 	AActor* Actor = RevealActor.Get();
@@ -188,7 +190,7 @@ void ACaveboundPlaceBeamVFX::StartReveal()
 		return;
 	}
 
-	// Keep turret from fighting the fade while we own its look.
+	// keeps turret from fighting the fade while we own its look
 	if (ACaveboundTurret* Turret = Cast<ACaveboundTurret>(Actor))
 	{
 		Turret->SetRevealLocked(true);
@@ -229,6 +231,7 @@ void ACaveboundPlaceBeamVFX::StartReveal()
 	UpdateReveal(0.f);
 }
 
+// updates hologram tint / scale during the beam
 void ACaveboundPlaceBeamVFX::UpdateReveal(float Progress)
 {
 	const float T = FMath::Clamp(Progress, 0.f, 1.f);
@@ -239,18 +242,18 @@ void ACaveboundPlaceBeamVFX::UpdateReveal(float Progress)
 		FLinearColor Tint = BeamColor;
 		if (bFadeIn)
 		{
-			// Build: strong hologram that eases toward the real mesh.
+			// build: strong hologram that eases toward the real mesh
 			Tint.A = FMath::Lerp(0.95f, 0.15f, Ease);
 		}
 		else
 		{
-			// Upgrade: solid beam color, no fade.
+			// upgrade: solid beam color, no fade
 			Tint.A = 0.8f;
 		}
 		OverlayMat->SetVectorParameterValue(TEXT("Color"), Tint);
 	}
 
-	// Upgrades skip the scale pop-in.
+	// upgrades skip the scale pop-in
 	if (!bFadeIn)
 	{
 		return;
@@ -269,6 +272,7 @@ void ACaveboundPlaceBeamVFX::UpdateReveal(float Progress)
 	}
 }
 
+// restores meshes / outline and unlocks the defender
 void ACaveboundPlaceBeamVFX::ClearReveal()
 {
 	for (int32 i = 0; i < Meshes.Num(); ++i)
@@ -296,6 +300,7 @@ void ACaveboundPlaceBeamVFX::ClearReveal()
 	OverlayMat = nullptr;
 }
 
+// ends the beam and starts the pop flash
 void ACaveboundPlaceBeamVFX::StartPop()
 {
 	bPopping = true;
@@ -310,7 +315,7 @@ void ACaveboundPlaceBeamVFX::StartPop()
 		BeamMesh->SetVisibility(false);
 	}
 
-	// Defender is fully shown before the pop flash.
+	// defender is fully shown before the pop flash
 	ClearReveal();
 	if (OnDone)
 	{

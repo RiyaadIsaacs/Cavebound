@@ -7,6 +7,7 @@ void UCaveboundEmptyCursor::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 
+	// invisible software cursor so the OS arrow can be replaced
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	if (!WidgetTree || WidgetTree->RootWidget)
@@ -14,6 +15,7 @@ void UCaveboundEmptyCursor::NativeOnInitialized()
 		return;
 	}
 
+	// 1px hitless root — cursor shows nothing visually
 	USizeBox* Size = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("EmptyCursorSize"));
 	Size->SetWidthOverride(1.f);
 	Size->SetHeightOverride(1.f);

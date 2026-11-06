@@ -18,6 +18,7 @@ void UCaveboundBuildPrompt::NativeOnInitialized()
 		return;
 	}
 
+	// builds the floating keycap prompt (B / F)
 	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("PromptCanvas"));
 	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	WidgetTree->RootWidget = Canvas;
@@ -63,6 +64,7 @@ void UCaveboundBuildPrompt::SetPromptKey(const FString& Key)
 
 void UCaveboundBuildPrompt::SetHoverScreenPosition(FVector2D Position)
 {
+	// moves the keycap above the nearby slot
 	if (PanelSlot)
 	{
 		PanelSlot->SetPosition(Position);

@@ -16,6 +16,7 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 
+	// starts hidden until something is hovered
 	SetVisibility(ESlateVisibility::Collapsed);
 
 	if (!WidgetTree || WidgetTree->RootWidget)
@@ -23,6 +24,7 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 		return;
 	}
 
+	// builds the hover card layout
 	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("HoverCanvas"));
 	Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	WidgetTree->RootWidget = Canvas;
@@ -35,6 +37,7 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 	UVerticalBox* Body = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("HoverBody"));
 	Frame->SetContent(Body);
 
+	// name label
 	NameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("HoverName"));
 	NameText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnWood()));
 	NameText->SetFont(CaveboundUIStyle::Font(16));
@@ -45,6 +48,7 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 		NameSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 	}
 
+	// health bar
 	USizeBox* BarSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("HoverBarSize"));
 	BarSize->SetWidthOverride(168.f);
 	BarSize->SetHeightOverride(22.f);
@@ -63,6 +67,7 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 		BarSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 	}
 
+	// numeric hp text
 	HealthText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("HoverHP"));
 	HealthText->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::Body()));
 	HealthText->SetFont(CaveboundUIStyle::Font(13));
@@ -76,7 +81,7 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 	if (PanelSlot)
 	{
 		PanelSlot->SetAnchors(FAnchors(0.f, 0.f));
-		// Top-left of the card = mouse hotspot (same place the OS cursor tip would be).
+		// top-left of card follows the mouse tip
 		PanelSlot->SetAlignment(FVector2D(0.f, 0.f));
 		PanelSlot->SetAutoSize(true);
 	}
@@ -84,6 +89,7 @@ void UCaveboundHoverInfo::NativeOnInitialized()
 
 void UCaveboundHoverInfo::ShowAt(const FVector2D& ScreenPosition, const FText& Name, float Health, float MaxHealth)
 {
+	// fills name / hp / bar for the hovered target
 	const float MaxHP = FMath::Max(1.f, MaxHealth);
 	const float Clamped = FMath::Clamp(Health, 0.f, MaxHP);
 
@@ -105,6 +111,7 @@ void UCaveboundHoverInfo::ShowAt(const FVector2D& ScreenPosition, const FText& N
 
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 
+	// measures card so it can flip when near screen edges
 	FVector2D CardSize(200.f, 78.f);
 	if (Frame)
 	{
@@ -116,8 +123,6 @@ void UCaveboundHoverInfo::ShowAt(const FVector2D& ScreenPosition, const FText& N
 		}
 	}
 
-	// ScreenPosition is already viewport-local (GetMousePositionOnViewport). Prefer the
-	// widget's own geometry size so clamping matches the canvas the card lives on.
 	FVector2D ViewportSize = GetCachedGeometry().GetLocalSize();
 	if (ViewportSize.X < 1.f || ViewportSize.Y < 1.f)
 	{
@@ -128,6 +133,7 @@ void UCaveboundHoverInfo::ShowAt(const FVector2D& ScreenPosition, const FText& N
 		}
 	}
 
+	// keeps the card inside the viewport
 	FVector2D Pos = ScreenPosition;
 	if (Pos.X + CardSize.X > ViewportSize.X - 4.f)
 	{
@@ -149,5 +155,6 @@ void UCaveboundHoverInfo::ShowAt(const FVector2D& ScreenPosition, const FText& N
 
 void UCaveboundHoverInfo::HideInfo()
 {
+	// hides the hover card
 	SetVisibility(ESlateVisibility::Collapsed);
 }

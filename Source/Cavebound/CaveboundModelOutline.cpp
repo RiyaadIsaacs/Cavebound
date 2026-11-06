@@ -28,6 +28,7 @@ namespace CaveboundModelOutline
 	constexpr const TCHAR* OutlinePath = TEXT("/Game/Assets/Materials/PostFX/M_Outline.M_Outline");
 
 #if WITH_EDITOR
+	// enables skeletal/static usage flags on the outline material
 	static void EnsureUsageFlagsAndShaders(UMaterial* Base)
 	{
 		if (!Base)
@@ -42,7 +43,7 @@ namespace CaveboundModelOutline
 			return;
 		}
 
-		// SetMaterialUsage() refuses to write flags during PIE — set them directly.
+		// SetMaterialUsage() refuses to write flags during PIE — set them directly
 		if (bNeedSkel)
 		{
 			Base->SetUsageByFlag(MATUSAGE_SkeletalMesh, true);
@@ -80,6 +81,7 @@ namespace CaveboundModelOutline
 	}
 #endif
 
+	// loads and caches the shared outline overlay material
 	UMaterialInterface* GetMaterial()
 	{
 		static TWeakObjectPtr<UMaterialInterface> Cached;
@@ -121,6 +123,7 @@ namespace CaveboundModelOutline
 		return Loaded;
 	}
 
+	// skips hidden / empty meshes
 	static bool IsRenderableMesh(UMeshComponent* Mesh)
 	{
 		if (!IsValid(Mesh) || Mesh->bHiddenInGame || !Mesh->GetVisibleFlag())
@@ -138,6 +141,7 @@ namespace CaveboundModelOutline
 		return false;
 	}
 
+	// puts the outline overlay on one mesh
 	void ApplyToMesh(UMeshComponent* Mesh)
 	{
 		if (!IsRenderableMesh(Mesh))
@@ -154,6 +158,7 @@ namespace CaveboundModelOutline
 		}
 	}
 
+	// outlines every mesh on an actor
 	void ApplyToActor(AActor* Actor)
 	{
 		if (!IsValid(Actor))
@@ -168,6 +173,7 @@ namespace CaveboundModelOutline
 		}
 	}
 
+	// re-applies outline after a flash / glow cleared the overlay
 	void RestoreMesh(UMeshComponent* Mesh)
 	{
 		ApplyToMesh(Mesh);
@@ -192,6 +198,7 @@ namespace CaveboundModelOutline
 		}
 	}
 
+	// outlines all gameplay actors that should always have the rim
 	void EnsureWorld(UWorld* World)
 	{
 		if (!World)

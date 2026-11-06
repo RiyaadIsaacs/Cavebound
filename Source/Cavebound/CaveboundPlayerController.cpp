@@ -2,7 +2,14 @@
 #include "CaveboundBuildMenu.h"
 #include "CaveboundBuildPrompt.h"
 #include "CaveboundCharacter.h"
+#include "CaveboundControlsPanel.h"
 #include "CaveboundDefenderMenu.h"
+#include "CaveboundGameplayHud.h"
+#include "CaveboundGameOverScreen.h"
+#include "CaveboundPauseButton.h"
+#include "CaveboundPauseMenu.h"
+#include "CaveboundScreenFade.h"
+#include "CaveboundWaveCountdown.h"
 #include "CaveboundGameMode.h"
 #include "CaveboundDamageVignette.h"
 #include "CaveboundHoverHealth.h"
@@ -81,6 +88,17 @@ void ACaveboundPlayerController::BeginPlay()
 	{
 		GameMode->EnsureGameplayReady();
 	}
+
+	// fades the screen in when the match starts
+	if (!ScreenFade)
+	{
+		ScreenFade = CreateWidget<UCaveboundScreenFade>(this, UCaveboundScreenFade::StaticClass());
+		if (ScreenFade)
+		{
+			ScreenFade->AddToViewport(200);
+			ScreenFade->StartFadeIn(1.6f);
+		}
+	}
 }
 
 void ACaveboundPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -100,9 +118,10 @@ void ACaveboundPlayerController::ClearEnhancedClickMappings()
 
 void ACaveboundPlayerController::ShowHUD()
 {
-	if (HUDWidgetClass && !HUDWidget)
+	// C++ HUD only — WBP_PlayerHUD is intentionally unused
+	if (!HUDWidget)
 	{
-		HUDWidget = CreateWidget<UUserWidget>(this, HUDWidgetClass);
+		HUDWidget = CreateWidget<UCaveboundGameplayHud>(this, UCaveboundGameplayHud::StaticClass());
 		if (HUDWidget)
 		{
 			HUDWidget->AddToViewport(0);
@@ -122,6 +141,36 @@ void ACaveboundPlayerController::ShowHUD()
 		}
 	}
 
+	if (!WaveCountdown)
+	{
+		WaveCountdown = CreateWidget<UCaveboundWaveCountdown>(this, UCaveboundWaveCountdown::StaticClass());
+		if (WaveCountdown)
+		{
+			WaveCountdown->AddToViewport(1);
+			WaveCountdown->Refresh();
+		}
+	}
+
+	if (!PauseButtonWidget)
+	{
+		PauseButtonWidget = CreateWidget<UCaveboundPauseButton>(this, UCaveboundPauseButton::StaticClass());
+		if (PauseButtonWidget)
+		{
+			PauseButtonWidget->AddToViewport(2);
+		}
+	}
+
+	// creates the right-side controls list
+	if (!ControlsPanel)
+	{
+		ControlsPanel = CreateWidget<UCaveboundControlsPanel>(this, UCaveboundControlsPanel::StaticClass());
+		if (ControlsPanel)
+		{
+			ControlsPanel->AddToViewport(1);
+		}
+	}
+
+	// creates the hover health card overlay
 	if (!HoverInfo)
 	{
 		HoverInfo = CreateWidget<UCaveboundHoverInfo>(this, UCaveboundHoverInfo::StaticClass());
@@ -130,13 +179,14 @@ void ACaveboundPlayerController::ShowHUD()
 			HoverInfo->AddToViewport(100);
 		}
 	}
+	// creates the invisible software cursor widget
 	if (!EmptyCursor)
 	{
 		EmptyCursor = CreateWidget<UCaveboundEmptyCursor>(this, UCaveboundEmptyCursor::StaticClass());
 	}
 	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
 	{
-		// Required on desktop or Custom/software cursors never replace the OS arrow.
+		// required so Custom/software cursors replace the OS arrow
 		Viewport->SetUseSoftwareCursorWidgets(true);
 		if (EmptyCursor)
 		{
@@ -171,33 +221,50 @@ void ACaveboundPlayerController::CreateSkipCountdownButton()
 		return;
 	}
 
-	StartWaveButton = Cast<UButton>(HUDWidget->WidgetTree->FindWidget(FName(TEXT("StartWaveButton"))));
-	if (!StartWaveButton)
+	SkipCountdownCanvas = nullptr;
+	if (UCaveboundGameplayHud* GameplayHud = Cast<UCaveboundGameplayHud>(HUDWidget))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CreateSkipCountdownButton: StartWaveButton was not found in the HUD"));
+		SkipCountdownCanvas = GameplayHud->GetRootCanvas();
+	}
+	if (!SkipCountdownCanvas)
+	{
+		SkipCountdownCanvas = Cast<UCanvasPanel>(HUDWidget->WidgetTree->RootWidget);
+	}
+	if (!SkipCountdownCanvas)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CreateSkipCountdownButton: HUD has no canvas"));
 		return;
-	}
-	CaveboundUIStyle::ApplyRectButtonStyle(StartWaveButton);
-	if (UTextBlock* StartWaveLabel = Cast<UTextBlock>(StartWaveButton->GetChildAt(0)))
-	{
-		StartWaveLabel->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
-		StartWaveLabel->SetFont(CaveboundUIStyle::Font(13));
-	}
-	if (UCanvasPanelSlot* StartSlot = Cast<UCanvasPanelSlot>(StartWaveButton->Slot))
-	{
-		const FVector2D StartSize = StartSlot->GetSize();
-		StartSlot->SetSize(FVector2D(FMath::Max(StartSize.X, 240.f), 72.f));
 	}
 
-	SkipCountdownCanvas = Cast<UCanvasPanel>(HUDWidget->WidgetTree->RootWidget);
-	if (!SkipCountdownCanvas)
+	// builds the New Wave button in C++ (WBP_PlayerHUD disabled)
+	StartWaveButton = HUDWidget->WidgetTree->ConstructWidget<UButton>(
+		UButton::StaticClass(),
+		TEXT("StartWaveButton"));
+	CaveboundUIStyle::ApplyRectButtonStyle(StartWaveButton);
+
+	UTextBlock* StartWaveLabel = HUDWidget->WidgetTree->ConstructWidget<UTextBlock>(
+		UTextBlock::StaticClass(),
+		TEXT("StartWaveLabel"));
+	StartWaveLabel->SetText(FText::FromString(TEXT("New Wave")));
+	StartWaveLabel->SetJustification(ETextJustify::Center);
+	StartWaveLabel->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
+	StartWaveLabel->SetFont(CaveboundUIStyle::Font(18));
+	StartWaveButton->AddChild(StartWaveLabel);
+	if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(StartWaveButton->GetContentSlot()))
 	{
-		SkipCountdownCanvas = Cast<UCanvasPanel>(StartWaveButton->GetParent());
+		ContentSlot->SetHorizontalAlignment(HAlign_Center);
+		ContentSlot->SetVerticalAlignment(VAlign_Center);
+		ContentSlot->SetPadding(FMargin(4.f, 0.f));
 	}
-	if (!SkipCountdownCanvas)
+	StartWaveButton->OnClicked.AddDynamic(this, &ACaveboundPlayerController::RequestStartRound);
+
+	if (UCanvasPanelSlot* StartSlot = SkipCountdownCanvas->AddChildToCanvas(StartWaveButton))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CreateSkipCountdownButton: HUD has no canvas for overlaying the skip button"));
-		return;
+		StartSlot->SetAnchors(FAnchors(1.f, 1.f));
+		StartSlot->SetAlignment(FVector2D(1.f, 1.f));
+		StartSlot->SetSize(FVector2D(240.f, 72.f));
+		StartSlot->SetPosition(FVector2D(-24.f, -100.f));
+		StartSlot->SetAutoSize(false);
 	}
 
 	SkipCountdownButton = HUDWidget->WidgetTree->ConstructWidget<UButton>(
@@ -211,7 +278,7 @@ void ACaveboundPlayerController::CreateSkipCountdownButton()
 	Label->SetText(FText::FromString(TEXT("Skip Countdown")));
 	Label->SetJustification(ETextJustify::Center);
 	Label->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
-	Label->SetFont(CaveboundUIStyle::Font(13));
+	Label->SetFont(CaveboundUIStyle::Font(18));
 	SkipCountdownButton->AddChild(Label);
 	if (UButtonSlot* ButtonSlot = Cast<UButtonSlot>(SkipCountdownButton->GetContentSlot()))
 	{
@@ -226,10 +293,7 @@ void ACaveboundPlayerController::CreateSkipCountdownButton()
 		SkipCountdownButtonSlot->SetAnchors(FAnchors(0.f, 0.f));
 		SkipCountdownButtonSlot->SetAlignment(FVector2D::ZeroVector);
 		SkipCountdownButtonSlot->SetAutoSize(false);
-		if (const UCanvasPanelSlot* StartWaveCanvasSlot = Cast<UCanvasPanelSlot>(StartWaveButton->Slot))
-		{
-			SkipCountdownButtonSlot->SetSize(StartWaveCanvasSlot->GetSize());
-		}
+		SkipCountdownButtonSlot->SetSize(FVector2D(240.f, 72.f));
 	}
 
 	SkipCountdownButton->OnClicked.AddDynamic(this, &ACaveboundPlayerController::HandleSkipCountdownClicked);
@@ -315,7 +379,7 @@ void ACaveboundPlayerController::CreateSpeedButtons()
 		Text->SetText(Label);
 		Text->SetJustification(ETextJustify::Center);
 		Text->SetColorAndOpacity(FSlateColor(CaveboundUIStyle::InkOnCream()));
-		Text->SetFont(CaveboundUIStyle::Font(13));
+		Text->SetFont(CaveboundUIStyle::Font(18));
 		Button->AddChild(Text);
 		if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(Button->GetContentSlot()))
 		{
@@ -357,6 +421,7 @@ void ACaveboundPlayerController::CreateSpeedButtons()
 	SpeedButtonsSlot = Canvas->AddChildToCanvas(Row);
 	if (SpeedButtonsSlot)
 	{
+		// Y stays bottom-right; X is synced to the New Wave button in AlignRightSideUI
 		SpeedButtonsSlot->SetAnchors(FAnchors(1.f, 1.f));
 		SpeedButtonsSlot->SetAlignment(FVector2D(1.f, 1.f));
 		SpeedButtonsSlot->SetPosition(FVector2D(-24.f, -24.f));
@@ -364,6 +429,92 @@ void ACaveboundPlayerController::CreateSpeedButtons()
 	}
 
 	SetGameSpeed(1.f);
+}
+
+void ACaveboundPlayerController::AlignRightSideUI()
+{
+	if (!StartWaveButton || !SkipCountdownCanvas || !SpeedButtonsSlot)
+	{
+		return;
+	}
+
+	UCanvasPanelSlot* StartSlot = Cast<UCanvasPanelSlot>(StartWaveButton->Slot);
+	if (!StartSlot)
+	{
+		return;
+	}
+
+	const FGeometry CanvasGeometry = SkipCountdownCanvas->GetCachedGeometry();
+	const FVector2D CanvasSize = CanvasGeometry.GetLocalSize();
+	if (CanvasSize.X < 1.f || CanvasSize.Y < 1.f)
+	{
+		return;
+	}
+
+	// same gap used between speed buttons (6px padding on each side)
+	constexpr float EdgePad = 24.f;
+	constexpr float ClusterGap = 12.f;
+	constexpr float SpeedHeight = 64.f;
+
+	FVector2D StartSize = StartSlot->GetSize();
+	if (StartSize.X < 1.f || StartSize.Y < 1.f)
+	{
+		StartSize = FVector2D(240.f, 72.f);
+	}
+
+	const float RightOffset = -EdgePad;
+
+	// speed row sits on the bottom-right edge
+	SpeedButtonsSlot->SetAnchors(FAnchors(1.f, 1.f));
+	SpeedButtonsSlot->SetAlignment(FVector2D(1.f, 1.f));
+	SpeedButtonsSlot->SetPosition(FVector2D(RightOffset, -EdgePad));
+	SpeedButtonsSlot->SetAutoSize(true);
+
+	// lifts New Wave above the speed row by the same cluster gap
+	StartSlot->SetAnchors(FAnchors(1.f, 1.f));
+	StartSlot->SetAlignment(FVector2D(1.f, 1.f));
+	StartSlot->SetAutoSize(false);
+	StartSlot->SetSize(StartSize);
+	StartSlot->SetPosition(FVector2D(RightOffset, -(EdgePad + SpeedHeight + ClusterGap)));
+
+	const FGeometry StartGeometry = StartWaveButton->GetCachedGeometry();
+	const FVector2D StartAbsPos = StartGeometry.GetAbsolutePosition();
+	const FVector2D StartAbsSize = StartGeometry.GetAbsoluteSize();
+	if (StartAbsSize.IsNearlyZero())
+	{
+		return;
+	}
+
+	const float StartRightAbs = StartAbsPos.X + StartAbsSize.X;
+	if (ControlsPanel)
+	{
+		ControlsPanel->SetMinWidth(StartAbsSize.X);
+		ControlsPanel->AlignRightEdgeToAbsolute(StartRightAbs);
+	}
+}
+
+void ACaveboundPlayerController::AlignTopHud()
+{
+	if (!RockReadout || !PauseButtonWidget)
+	{
+		return;
+	}
+
+	FVector2D TreeCenter;
+	if (RockReadout->GetTreeBarCenterAbsolute(TreeCenter))
+	{
+		PauseButtonWidget->AlignToTreeBarCenter(TreeCenter);
+	}
+}
+
+void ACaveboundPlayerController::ToggleControlsPanel()
+{
+	if (bPauseMenuOpen || !ControlsPanel)
+	{
+		return;
+	}
+
+	ControlsPanel->ToggleCollapsed();
 }
 
 void ACaveboundPlayerController::SetGameSpeed(float Speed)
@@ -485,7 +636,11 @@ void ACaveboundPlayerController::ApplyPauseInputMode()
 {
 	FInputModeUIOnly InputMode;
 	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	if (PauseMenuWidget)
+	if (bGameOverScreenOpen && GameOverScreen)
+	{
+		InputMode.SetWidgetToFocus(GameOverScreen->TakeWidget());
+	}
+	else if (PauseMenuWidget)
 	{
 		InputMode.SetWidgetToFocus(PauseMenuWidget->TakeWidget());
 	}
@@ -495,19 +650,14 @@ void ACaveboundPlayerController::ApplyPauseInputMode()
 
 void ACaveboundPlayerController::ShowPauseMenu()
 {
-	if (!PauseMenuWidgetClass)
-	{
-		return;
-	}
-
+	// C++ pause menu only — WBP_PauseMenu is intentionally unused
 	if (!PauseMenuWidget)
 	{
-		PauseMenuWidget = CreateWidget<UUserWidget>(this, PauseMenuWidgetClass);
+		PauseMenuWidget = CreateWidget<UCaveboundPauseMenu>(this, UCaveboundPauseMenu::StaticClass());
 	}
 
 	if (PauseMenuWidget && !PauseMenuWidget->IsInViewport())
 	{
-		// Above the gameplay HUD
 		PauseMenuWidget->AddToViewport(10);
 	}
 }
@@ -522,6 +672,11 @@ void ACaveboundPlayerController::HidePauseMenu()
 
 void ACaveboundPlayerController::TogglePauseMenu()
 {
+	if (bGameOverScreenOpen)
+	{
+		return;
+	}
+
 	if (BuildMenu && BuildMenu->IsInViewport())
 	{
 		CloseBuildMenu();
@@ -540,7 +695,7 @@ void ACaveboundPlayerController::TogglePauseMenu()
 
 void ACaveboundPlayerController::PauseGame()
 {
-	if (bPauseMenuOpen)
+	if (bPauseMenuOpen || bGameOverScreenOpen)
 	{
 		return;
 	}
@@ -571,13 +726,68 @@ void ACaveboundPlayerController::QuitGame()
 	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
 }
 
+void ACaveboundPlayerController::RestartMatch()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UGameplayStatics::SetGamePaused(this, false);
+	const FString LevelName = UGameplayStatics::GetCurrentLevelName(World, true);
+	UGameplayStatics::OpenLevel(World, FName(*LevelName));
+}
+
+void ACaveboundPlayerController::ShowGameOverScreen()
+{
+	if (bGameOverScreenOpen)
+	{
+		return;
+	}
+
+	bGameOverScreenOpen = true;
+	bPauseMenuOpen = false;
+	HidePauseMenu();
+	CloseBuildMenu();
+	CloseDefenderMenu();
+
+	if (!GameOverScreen)
+	{
+		GameOverScreen = CreateWidget<UCaveboundGameOverScreen>(this, UCaveboundGameOverScreen::StaticClass());
+	}
+	if (GameOverScreen && !GameOverScreen->IsInViewport())
+	{
+		GameOverScreen->AddToViewport(20);
+	}
+
+	UGameplayStatics::SetGamePaused(this, true);
+	ApplyPauseInputMode();
+}
+
+bool ACaveboundPlayerController::IsInGracePeriod() const
+{
+	const ACaveboundGameMode* GameMode = GetWorld()
+		? GetWorld()->GetAuthGameMode<ACaveboundGameMode>()
+		: nullptr;
+	return GameMode && GameMode->IsRoundIdle();
+}
+
+void ACaveboundPlayerController::NotifyGraceBuildBlocked()
+{
+	if (RockReadout)
+	{
+		RockReadout->ShowGraceBuildTip();
+	}
+}
+
 void ACaveboundPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
 	if (InputComponent)
 	{
-		// bExecuteWhenPaused so Escape/Tab can resume while the world is paused
+		// Escape pauses / resumes even while the world is paused
 		FInputKeyBinding& EscapeBinding = InputComponent->BindKey(
 			EKeys::Escape,
 			IE_Pressed,
@@ -585,12 +795,12 @@ void ACaveboundPlayerController::SetupInputComponent()
 			&ACaveboundPlayerController::TogglePauseMenu);
 		EscapeBinding.bExecuteWhenPaused = true;
 
-		FInputKeyBinding& TabBinding = InputComponent->BindKey(
+		// Tab collapses / expands the controls card
+		InputComponent->BindKey(
 			EKeys::Tab,
 			IE_Pressed,
 			this,
-			&ACaveboundPlayerController::TogglePauseMenu);
-		TabBinding.bExecuteWhenPaused = true;
+			&ACaveboundPlayerController::ToggleControlsPanel);
 
 		InputComponent->BindKey(EKeys::B, IE_Pressed, this, &ACaveboundPlayerController::HandleBuildKey);
 		InputComponent->BindKey(EKeys::F, IE_Pressed, this, &ACaveboundPlayerController::HandleDefenderKey);
@@ -600,7 +810,7 @@ void ACaveboundPlayerController::SetupInputComponent()
 
 void ACaveboundPlayerController::RequestStartRound()
 {
-	if (bPauseMenuOpen)
+	if (bPauseMenuOpen || bGameOverScreenOpen)
 	{
 		return;
 	}
@@ -623,11 +833,37 @@ void ACaveboundPlayerController::PlayerTick(float DeltaTime)
 
 	StripSlotPlaceKeys();
 	UpdateBuildSlotPresentation();
+	if (ScreenFade)
+	{
+		ScreenFade->TickFade(DeltaTime);
+	}
 	if (RockReadout)
 	{
 		RockReadout->Refresh();
+		RockReadout->TickGraceTip(DeltaTime);
+	}
+	if (WaveCountdown)
+	{
+		WaveCountdown->Refresh();
 	}
 	UpdateSkipCountdownButton();
+	AlignRightSideUI();
+	AlignTopHud();
+
+	// presents game over once the tree is gone
+	if (!bGameOverScreenOpen)
+	{
+		if (const ACaveboundGameMode* GameMode = GetWorld()
+			? GetWorld()->GetAuthGameMode<ACaveboundGameMode>()
+			: nullptr)
+		{
+			if (GameMode->IsGameOver())
+			{
+				ShowGameOverScreen();
+			}
+		}
+	}
+
 	if (DamageVignette)
 	{
 		DamageVignette->TickFade(DeltaTime);
@@ -725,7 +961,7 @@ bool ACaveboundPlayerController::IsMouseButtonHeld(const FKey& Button) const
 
 bool ACaveboundPlayerController::IsPointerOverInteractiveUI() const
 {
-	if (bPauseMenuOpen)
+	if (bPauseMenuOpen || bGameOverScreenOpen)
 	{
 		return true;
 	}
@@ -774,6 +1010,11 @@ bool ACaveboundPlayerController::IsPointerOverInteractiveUI() const
 	if ((SpeedButton1 && SpeedButton1->IsHovered())
 		|| (SpeedButton2 && SpeedButton2->IsHovered())
 		|| (SpeedButton3 && SpeedButton3->IsHovered()))
+	{
+		return true;
+	}
+
+	if (PauseButtonWidget && HasHoveredInteractiveChild(PauseButtonWidget))
 	{
 		return true;
 	}
@@ -838,6 +1079,7 @@ AActor* ACaveboundPlayerController::TraceActorUnderCursor() const
 		return nullptr;
 	}
 
+	// deprojects mouse into a world ray
 	FVector WorldLocation;
 	FVector WorldDirection;
 	if (!DeprojectMousePositionToWorld(WorldLocation, WorldDirection))
@@ -845,7 +1087,7 @@ AActor* ACaveboundPlayerController::TraceActorUnderCursor() const
 		return nullptr;
 	}
 
-	// Complex mesh hits so big simplified collisions don't keep "hovering" after you leave.
+	// complex mesh hits so big collision boxes don't stick hover
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(CursorTrace), /*bTraceComplex*/ true, GetPawn());
 	const FVector TraceEnd = WorldLocation + WorldDirection * 100000.f;
 
@@ -868,6 +1110,7 @@ AActor* ACaveboundPlayerController::TraceActorUnderCursor() const
 	return nullptr;
 }
 
+// walks owner/attach parents until a hover-health actor is found
 static AActor* FindHoverHealthActor(AActor* Start)
 {
 	AActor* Candidate = Start;
@@ -909,7 +1152,7 @@ bool ACaveboundPlayerController::IsCursorOverActorVisual(const AActor* Actor) co
 	FVector Origin = Actor->GetActorLocation();
 	FVector Extent(35.f, 35.f, 70.f);
 
-	// Use visible meshes only — collision volumes made hover feel sticky/inaccurate.
+	// uses visible meshes only — collision volumes made hover sticky
 	FBox Combined(ForceInit);
 	bool bGotBounds = false;
 	TArray<UMeshComponent*> Meshes;
@@ -1006,6 +1249,7 @@ bool ACaveboundPlayerController::IsBuildSlotActor(const AActor* Actor) const
 	return SlotClass.IsValid() && Actor->IsA(SlotClass.Get());
 }
 
+// picks glow tint by hovered actor type
 FLinearColor ACaveboundPlayerController::GetHoverGlowColor(const AActor* Actor) const
 {
 	if (!Actor)
@@ -1031,6 +1275,7 @@ FLinearColor ACaveboundPlayerController::GetHoverGlowColor(const AActor* Actor) 
 	return FLinearColor(1.8f, 1.8f, 1.8f);
 }
 
+// removes hover glow and restores outline / pad highlight
 void ACaveboundPlayerController::ClearHoverGlow()
 {
 	AActor* Prev = HoverGlowActor.Get();
@@ -1040,7 +1285,7 @@ void ACaveboundPlayerController::ClearHoverGlow()
 		return;
 	}
 
-	// Nearby empty slots keep their soft white pad highlight; otherwise restore outline.
+	// nearby empty slots keep soft white pad highlight; else restore outline
 	const bool bStillNearby = HighlightedSlots.ContainsByPredicate(
 		[Prev](const TWeakObjectPtr<AActor>& Existing)
 		{
@@ -1056,6 +1301,7 @@ void ACaveboundPlayerController::ClearHoverGlow()
 	}
 }
 
+// applies colored overlay glow to the hovered actor's meshes
 void ACaveboundPlayerController::ApplyHoverGlow(AActor* Actor, const FLinearColor& Color)
 {
 	if (!IsValid(Actor))
@@ -1063,12 +1309,13 @@ void ACaveboundPlayerController::ApplyHoverGlow(AActor* Actor, const FLinearColo
 		return;
 	}
 
-	// Rocks need the flat overlay path; enemies intentionally have hover info only (no glow).
+	// rocks use flat fill; enemies get hover info only (no glow)
 	const bool bRock = Actor->IsA(ACaveboundRockDeposit::StaticClass());
 
 	UMaterialInstanceDynamic* GlowMID = nullptr;
 	if (bRock)
 	{
+		// flat translucent fill for rocks
 		if (!HoverGlowFillMaterial)
 		{
 			if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(
@@ -1088,6 +1335,7 @@ void ACaveboundPlayerController::ApplyHoverGlow(AActor* Actor, const FLinearColo
 	}
 	else
 	{
+		// outline glow MID for trees / towers / pads
 		if (!HoverGlowMaterial)
 		{
 			HoverGlowMaterial = CaveboundShaderMaterials::CreateHoverOutlineMID(this);
@@ -1119,6 +1367,7 @@ void ACaveboundPlayerController::ApplyHoverGlow(AActor* Actor, const FLinearColo
 		return;
 	}
 
+	// paints the glow onto every visible mesh
 	TArray<UMeshComponent*> Meshes;
 	Actor->GetComponents<UMeshComponent>(Meshes);
 	for (UMeshComponent* Mesh : Meshes)
@@ -1141,10 +1390,11 @@ void ACaveboundPlayerController::ApplyHoverGlow(AActor* Actor, const FLinearColo
 	HoverGlowActor = Actor;
 }
 
+// keeps glow on the current hover target (skips enemies)
 void ACaveboundPlayerController::UpdateHoverGlow()
 {
 	AActor* Target = HoveredHealthActor.Get();
-	// Enemies keep hover info, but no glow.
+	// enemies keep hover info, but no glow
 	if (Target && Target->IsA(ACaveboundBaseEnemy::StaticClass()))
 	{
 		Target = nullptr;
@@ -1167,10 +1417,11 @@ void ACaveboundPlayerController::UpdateHoverGlow()
 		return;
 	}
 
-	// Refresh so a damage flash clearing the overlay doesn't stick.
+	// reapply so a damage flash clearing the overlay doesn't stick
 	ApplyHoverGlow(Target, Color);
 }
 
+// traces under cursor to find hover health / build slot targets
 void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 {
 	HoveredHealthActor = nullptr;
@@ -1181,6 +1432,7 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 		return;
 	}
 
+	// skip while a build / defender menu is open
 	if ((BuildMenu && BuildMenu->IsInViewport())
 		|| (DefenderMenu && DefenderMenu->IsInViewport()))
 	{
@@ -1203,6 +1455,7 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(HoverHealthTrace), /*bTraceComplex*/ true, GetPawn());
 	const FVector TraceEnd = WorldLocation + WorldDirection * 100000.f;
 
+	// gathers visibility + dynamic hits, nearest first
 	TArray<FHitResult> Hits;
 	World->LineTraceMultiByChannel(Hits, WorldLocation, TraceEnd, ECC_Visibility, Params);
 	{
@@ -1226,8 +1479,7 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 
 		if (AActor* HoverActor = FindHoverHealthActor(HitActor))
 		{
-			// Enemies use an invisible HitVolume for traces; Body is NoCollision.
-			// Gate on the visible silhouette instead of requiring a visible hit component.
+			// gate on visible silhouette (enemies use invisible hit volumes)
 			if (IsCursorOverActorVisual(HoverActor))
 			{
 				HoveredHealthActor = HoverActor;
@@ -1238,7 +1490,7 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 
 		if (IsBuildSlotActor(HitActor) && IsCursorOverActorVisual(HitActor))
 		{
-			// Occupied pads don't take hover — prefer the defender on them.
+			// occupied pads prefer the defender for hover
 			if (ACaveboundTurret* Defender = GetDefenderOnSlot(HitActor))
 			{
 				if (!Defender->IsDestroyed())
@@ -1252,7 +1504,7 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 		}
 	}
 
-	// Empty nearby pads often fail the visibility trace (overlap-only collision).
+	// fallback: nearby empty pads often miss visibility traces
 	if (!HoveredHealthActor.IsValid() && !HoveredBuildSlot.IsValid())
 	{
 		TArray<AActor*> NearbySlots;
@@ -1298,6 +1550,7 @@ void ACaveboundPlayerController::UpdateHoveredHealthTarget()
 	}
 }
 
+// creates / binds the screen damage vignette
 void ACaveboundPlayerController::EnsureDamageVignette()
 {
 	if (!DamageVignette)
@@ -1310,6 +1563,7 @@ void ACaveboundPlayerController::EnsureDamageVignette()
 	}
 }
 
+// flashes red edges when the player takes damage
 void ACaveboundPlayerController::PulseDamageVignette()
 {
 	EnsureDamageVignette();
@@ -1319,6 +1573,7 @@ void ACaveboundPlayerController::PulseDamageVignette()
 	}
 }
 
+// flashes green edges when wood is collected
 void ACaveboundPlayerController::PulseWoodVignette()
 {
 	EnsureDamageVignette();
@@ -1328,6 +1583,7 @@ void ACaveboundPlayerController::PulseWoodVignette()
 	}
 }
 
+// flashes grey edges when rock is collected
 void ACaveboundPlayerController::PulseRockVignette()
 {
 	EnsureDamageVignette();
@@ -1337,6 +1593,7 @@ void ACaveboundPlayerController::PulseRockVignette()
 	}
 }
 
+// darkens the screen as the sacred tree loses health
 void ACaveboundPlayerController::SyncTreeScreenDarken()
 {
 	EnsureDamageVignette();
@@ -1356,6 +1613,7 @@ void ACaveboundPlayerController::SyncTreeScreenDarken()
 	DamageVignette->SetTreeHealthFraction(HealthFrac);
 }
 
+// shows / hides the hover health card at the mouse
 void ACaveboundPlayerController::UpdateHoverInfoWidget()
 {
 	if (!HoverInfo)
@@ -1370,7 +1628,7 @@ void ACaveboundPlayerController::UpdateHoverInfoWidget()
 		return;
 	}
 
-	// Viewport slate space — raw GetMousePosition() is pixels and leaves the card offset.
+	// viewport slate space — GetMousePosition() is pixels and offsets the card
 	const FVector2D Mouse = UWidgetLayoutLibrary::GetMousePositionOnViewport(this);
 	HoverInfo->ShowAt(
 		Mouse,
@@ -1380,6 +1638,7 @@ void ACaveboundPlayerController::UpdateHoverInfoWidget()
 	SetHoverInfoAsCursor(true);
 }
 
+// swaps to invisible software cursor while hover card is up
 void ACaveboundPlayerController::SetHoverInfoAsCursor(bool bActive)
 {
 	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
@@ -1510,9 +1769,10 @@ void ACaveboundPlayerController::StripSlotPlaceKeys()
 	}
 }
 
+// B key — opens / closes the place-defender menu
 void ACaveboundPlayerController::HandleBuildKey()
 {
-	if (bPauseMenuOpen)
+	if (bPauseMenuOpen || bGameOverScreenOpen)
 	{
 		return;
 	}
@@ -1528,15 +1788,22 @@ void ACaveboundPlayerController::HandleBuildKey()
 		CloseDefenderMenu();
 	}
 
+	if (IsInGracePeriod())
+	{
+		NotifyGraceBuildBlocked();
+		return;
+	}
+
 	if (AActor* Slot = FindBuildSlotForMenu())
 	{
 		OpenBuildMenu(Slot);
 	}
 }
 
+// F key — opens / closes the upgrade / repair / disarm menu
 void ACaveboundPlayerController::HandleDefenderKey()
 {
-	if (bPauseMenuOpen)
+	if (bPauseMenuOpen || bGameOverScreenOpen)
 	{
 		return;
 	}
@@ -1561,10 +1828,17 @@ void ACaveboundPlayerController::HandleDefenderKey()
 	}
 }
 
+// shows the defender picker anchored above a build slot
 void ACaveboundPlayerController::OpenBuildMenu(AActor* Slot)
 {
-	if (!Slot)
+	if (!Slot || bGameOverScreenOpen)
 	{
+		return;
+	}
+
+	if (IsInGracePeriod())
+	{
+		NotifyGraceBuildBlocked();
 		return;
 	}
 
@@ -1610,6 +1884,7 @@ void ACaveboundPlayerController::CloseBuildMenu()
 	ApplyGameplayInputMode();
 }
 
+// shows upgrade / repair / disarm for the defender on a slot
 void ACaveboundPlayerController::OpenDefenderMenu(AActor* Slot)
 {
 	ACaveboundTurret* Defender = GetDefenderOnSlot(Slot);
@@ -1735,6 +2010,7 @@ void ACaveboundPlayerController::CollectOccupiedSlots(TArray<AActor*>& OutSlots,
 	}
 }
 
+// runs upgrade (0), repair (1), or disarm (2) from the defender menu
 bool ACaveboundPlayerController::UseDefenderAction(AActor* Slot, int32 Action, FString& OutFailure)
 {
 	OutFailure.Reset();
@@ -1747,6 +2023,7 @@ bool ACaveboundPlayerController::UseDefenderAction(AActor* Slot, int32 Action, F
 		return false;
 	}
 
+	// upgrade — spends resources, levels up, plays beam vfx
 	if (Action == 0)
 	{
 		if (Defender->GetUpgradeLevel() >= Defender->GetMaxUpgradeLevel())
@@ -1767,7 +2044,7 @@ bool ACaveboundPlayerController::UseDefenderAction(AActor* Slot, int32 Action, F
 			return false;
 		}
 
-		// Upgrade: beam-colored tint + pop, but no scale fade-in (build-only).
+		// beam tint + pop, no scale fade-in (build-only)
 		Defender->ApplyCommittedUpgrade();
 		ACaveboundPlaceBeamVFX::SpawnAt(
 			World,
@@ -1778,6 +2055,7 @@ bool ACaveboundPlayerController::UseDefenderAction(AActor* Slot, int32 Action, F
 		return true;
 	}
 
+	// repair — spends wood to restore full health
 	if (Action == 1)
 	{
 		if (Defender->GetRepairCost() <= 0)
@@ -1793,6 +2071,7 @@ bool ACaveboundPlayerController::UseDefenderAction(AActor* Slot, int32 Action, F
 		return true;
 	}
 
+	// disarm — refunds resources and removes the defender
 	int32 refundWood = 0;
 	int32 refundRock = 0;
 	Defender->GetDisarmRefund(refundWood, refundRock);
@@ -1945,6 +2224,7 @@ void ACaveboundPlayerController::UpdateBuildSlotPresentation()
 		}
 	}
 
+	// while a menu is open, keep it pinned above the slot and hide the key prompt
 	const bool bBuildMenuOpen = BuildMenu && BuildMenu->IsInViewport();
 	const bool bDefenderMenuOpen = DefenderMenu && DefenderMenu->IsInViewport();
 	if (bBuildMenuOpen || bDefenderMenuOpen)
@@ -1968,6 +2248,7 @@ void ACaveboundPlayerController::UpdateBuildSlotPresentation()
 		return;
 	}
 
+	// picks B (empty) or F (occupied) prompt for the nearest slot
 	TArray<AActor*> OccupiedSlots;
 	AActor* OccupiedClosest = nullptr;
 	CollectOccupiedSlots(OccupiedSlots, OccupiedClosest);
@@ -2030,11 +2311,19 @@ void ACaveboundPlayerController::UpdateBuildSlotPresentation()
 	}
 }
 
+// spends wood, spawns the defender, and plays place-beam vfx
 bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<AActor> DefenderClass)
 {
 	UWorld* World = GetWorld();
-	if (!Slot || !DefenderClass || !World)
+	if (!Slot || !DefenderClass || !World || bGameOverScreenOpen)
 	{
+		return false;
+	}
+
+	ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>();
+	if (!GameMode || GameMode->IsRoundIdle())
+	{
+		NotifyGraceBuildBlocked();
 		return false;
 	}
 
@@ -2045,8 +2334,7 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 	}
 
 	const int32 Cost = ACaveboundTurret::GetCostForClass(DefenderClass);
-	ACaveboundGameMode* GameMode = World->GetAuthGameMode<ACaveboundGameMode>();
-	if (Cost <= 0 || !GameMode || !GameMode->UseWood(Cost))
+	if (Cost <= 0 || !GameMode->UseWood(Cost))
 	{
 		return false;
 	}
@@ -2060,12 +2348,12 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 	AActor* Spawned = SpawnPlacedDefender(Slot, DefenderClass, SlotTransform);
 	if (!Spawned)
 	{
-		GameMode->AddWood(Cost);
+		GameMode->GiveWood(Cost);
 		ClearSlotOccupied(Slot);
 		return false;
 	}
 
-	// Fade the defender in with the yellow beam, then pop it in when the beam ends.
+	// fades the defender in with the yellow beam, then pops it in
 	ACaveboundPlaceBeamVFX::SpawnAt(
 		World,
 		Slot->GetActorLocation(),
@@ -2074,6 +2362,7 @@ bool ACaveboundPlayerController::PlaceDefenderAtSlot(AActor* Slot, TSubclassOf<A
 	return true;
 }
 
+// spawns a defender actor and wires it to the build slot
 AActor* ACaveboundPlayerController::SpawnPlacedDefender(
 	AActor* Slot,
 	TSubclassOf<AActor> DefenderClass,

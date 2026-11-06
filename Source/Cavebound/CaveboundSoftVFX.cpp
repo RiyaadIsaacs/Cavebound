@@ -6,9 +6,10 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 
-// Shared helpers for the soft sphere VFX.
+// shared helpers for soft sphere VFX
 namespace SoftVFX
 {
+	// caches the engine sphere mesh
 	UStaticMesh* SphereMesh()
 	{
 		static TWeakObjectPtr<UStaticMesh> Cached;
@@ -22,6 +23,7 @@ namespace SoftVFX
 		return Mesh;
 	}
 
+	// translucent soft material
 	UMaterialInterface* SoftMat()
 	{
 		return LoadObject<UMaterialInterface>(
@@ -29,7 +31,7 @@ namespace SoftVFX
 			TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Translucent.Widget3DPassThrough_Translucent"));
 	}
 
-	/** Bright emissive material — makes embers actually glow. */
+	// bright emissive material for glowing sparks / embers
 	UMaterialInterface* GlowMat()
 	{
 		return LoadObject<UMaterialInterface>(
@@ -37,7 +39,7 @@ namespace SoftVFX
 			TEXT("/Engine/EngineMaterials/EmissiveMeshMaterial.EmissiveMeshMaterial"));
 	}
 
-	/** Makes a small non-colliding sphere and optional dynamic material. */
+	// creates a small non-colliding sphere with optional MID
 	UStaticMeshComponent* MakeBall(
 		AActor* Owner,
 		USceneComponent* Parent,
@@ -73,6 +75,7 @@ ACaveboundSparkBurst::ACaveboundSparkBurst()
 	SetActorEnableCollision(false);
 }
 
+// creates and plays hit spark burst at a world location
 void ACaveboundSparkBurst::SpawnAt(
 	UWorld* World,
 	const FVector& Location,
@@ -111,7 +114,7 @@ void ACaveboundSparkBurst::BeginPlay()
 	Super::BeginPlay();
 
 	UStaticMesh* Mesh = SoftVFX::SphereMesh();
-	// Prefer emissive so grey/colored sparks stay readable.
+	// prefer emissive so grey/colored sparks stay readable
 	UMaterialInterface* BaseMat = SoftVFX::GlowMat();
 	if (!BaseMat)
 	{
@@ -128,6 +131,7 @@ void ACaveboundSparkBurst::BeginPlay()
 	Mats.Reset();
 	Speeds.Reset();
 
+	// spawns each spark ball with random size / velocity
 	for (int32 i = 0; i < Count; ++i)
 	{
 		UMaterialInstanceDynamic* Mat = nullptr;
@@ -154,7 +158,7 @@ void ACaveboundSparkBurst::BeginPlay()
 			Mat->SetVectorParameterValue(TEXT("EmissiveColor"), Lit);
 		}
 
-		// Shoot outward + a bit upward.
+		// shoots outward + a bit upward
 		const FVector Dir = FMath::VRand().GetSafeNormal();
 		Speeds.Add(
 			Dir * FMath::FRandRange(220.f, 520.f) * Scale
@@ -172,6 +176,7 @@ void ACaveboundSparkBurst::Tick(float DeltaTime)
 	const float T = FMath::Clamp(Time / FMath::Max(0.05f, Duration), 0.f, 1.f);
 	const float Fade = 1.f - T;
 
+	// moves / fades sparks, then destroys when done
 	for (int32 i = 0; i < Balls.Num(); ++i)
 	{
 		UStaticMeshComponent* Ball = Balls[i];
@@ -180,7 +185,7 @@ void ACaveboundSparkBurst::Tick(float DeltaTime)
 			continue;
 		}
 
-		// Gravity + move.
+		// gravity + move
 		const float Scale = FMath::Max(0.1f, SizeScale);
 		Speeds[i] += FVector(0.f, 0.f, -650.f) * DeltaTime;
 		Ball->AddRelativeLocation(Speeds[i] * DeltaTime);
@@ -214,6 +219,7 @@ ACaveboundHoverEmbers::ACaveboundHoverEmbers()
 	SetActorEnableCollision(false);
 }
 
+// attaches looping ember orbs to a parent actor
 ACaveboundHoverEmbers* ACaveboundHoverEmbers::SpawnAttached(
 	AActor* Parent,
 	const FVector& LocalOffset,
@@ -298,6 +304,7 @@ void ACaveboundHoverEmbers::Tick(float DeltaTime)
 
 	Time += DeltaTime;
 
+	// orbits and pulses each ember around the parent
 	for (int32 i = 0; i < Balls.Num(); ++i)
 	{
 		UStaticMeshComponent* Ball = Balls[i];
@@ -319,7 +326,7 @@ void ACaveboundHoverEmbers::Tick(float DeltaTime)
 
 		if (UMaterialInstanceDynamic* Mat = Mats.IsValidIndex(i) ? Mats[i] : nullptr)
 		{
-			// Pulse the emissive brightness — hue stays deep warm green.
+			// pulses emissive brightness
 			const float Pulse = 0.65f + 0.35f * (0.5f + 0.5f * FMath::Sin(Time * 3.f + P));
 			const FLinearColor Lit = Color * (2.5f + 3.5f * Pulse);
 			Mat->SetVectorParameterValue(TEXT("Color"), Lit);
@@ -358,6 +365,7 @@ ACaveboundMagicPoof::ACaveboundMagicPoof()
 	SetActorEnableCollision(false);
 }
 
+// creates and plays spawn poof at a world location
 void ACaveboundMagicPoof::SpawnAt(UWorld* World, const FVector& Location)
 {
 	if (!World)
@@ -379,7 +387,7 @@ void ACaveboundMagicPoof::BeginPlay()
 	Super::BeginPlay();
 
 	UStaticMesh* Mesh = SoftVFX::SphereMesh();
-	// One soft translucent material for everything — emissive was causing the broken look.
+	// soft translucent only — emissive looked broken on this effect
 	UMaterialInterface* Soft = SoftVFX::SoftMat();
 	if (!Mesh || !Soft)
 	{
@@ -387,6 +395,7 @@ void ACaveboundMagicPoof::BeginPlay()
 		return;
 	}
 
+	// bright core puff
 	{
 		UMaterialInstanceDynamic* Mat = nullptr;
 		Core = SoftVFX::MakeBall(this, Root, Mesh, Soft, TEXT("PoofCore"), Mat);
@@ -402,6 +411,7 @@ void ACaveboundMagicPoof::BeginPlay()
 	StartSizes.Reset();
 	BaseTints.Reset();
 
+	// outer soft puffs that drift and fade
 	for (int32 i = 0; i < Count; ++i)
 	{
 		UMaterialInstanceDynamic* Mat = nullptr;
@@ -443,7 +453,7 @@ void ACaveboundMagicPoof::Tick(float DeltaTime)
 	Time += DeltaTime;
 	const float T = FMath::Clamp(Time / FMath::Max(0.05f, Duration), 0.f, 1.f);
 
-	// Expand quickly, then ease out to fully transparent.
+	// expands quickly, then eases out to fully transparent
 	const float Expand = FMath::InterpEaseOut(0.f, 1.f, FMath::Clamp(T / 0.35f, 0.f, 1.f), 2.f);
 	const float Fade = FMath::InterpEaseIn(1.f, 0.f, T, 2.2f);
 

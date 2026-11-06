@@ -4,7 +4,7 @@
 
 ACaveboundCannon::ACaveboundCannon()
 {
-	// Cannon tower model
+	// cannon tower mesh + transform
 	VisualMesh->SetRelativeScale3D(FVector(DefenderMeshScale));
 	VisualMesh->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualMesh->SetRelativeLocation(FVector::ZeroVector);
@@ -22,7 +22,7 @@ ACaveboundCannon::ACaveboundCannon()
 	ProjectileClass = ACaveboundCannonShell::StaticClass();
 	FirePointOffset = FVector(70.f, 0.f, 220.f);
 
-	// Shoots slowly but long range
+	// slow long-range heavy shells
 	Cost = 75;
 	MaxHealth = 220.f;
 	Health = MaxHealth;

@@ -7,17 +7,15 @@
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
-// A flat unlit red material built from the engine's WidgetMaterial_Transparent
+// shared flat translucent MID used for hit flashes
 static UMaterialInstanceDynamic* GetOrCreateRedMID(UObject* WorldContext)
 {
-	// One shared MID across the whole session
 	static TWeakObjectPtr<UMaterialInstanceDynamic> SharedMID;
 	if (UMaterialInstanceDynamic* Existing = SharedMID.Get())
 	{
 		return Existing;
 	}
 
-	// Use the engine's widget translucent material as a base
 	UMaterialInterface* Base = Cast<UMaterialInterface>(StaticLoadObject(UMaterialInterface::StaticClass(),nullptr,
 		TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Translucent.Widget3DPassThrough_Translucent")));
 
@@ -29,7 +27,6 @@ static UMaterialInstanceDynamic* GetOrCreateRedMID(UObject* WorldContext)
 	UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Base, WorldContext);
 	if (MID)
 	{
-		// Bright red, slightly transparent so the original shape still reads through
 		MID->SetVectorParameterValue(FName(TEXT("Color")), FLinearColor(1.f, 0.f, 0.f, 0.7f));
 		SharedMID = MID;
 	}
@@ -37,6 +34,7 @@ static UMaterialInstanceDynamic* GetOrCreateRedMID(UObject* WorldContext)
 	return MID;
 }
 
+// restores outline after a flash ends
 void FCaveboundDamageFlash::ClearFlash(const TArray<UStaticMeshComponent*>& Meshes)
 {
 	for (UStaticMeshComponent* Mesh : Meshes)
@@ -45,6 +43,7 @@ void FCaveboundDamageFlash::ClearFlash(const TArray<UStaticMeshComponent*>& Mesh
 	}
 }
 
+// flashes multiple static meshes, then restores outline
 void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStaticMeshComponent*>& Meshes,FTimerHandle& TimerHandle,
 	FLinearColor FlashColor,
 	float Duration)
@@ -55,7 +54,7 @@ void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStat
 		return;
 	}
 
-	// Clear any previous flash timer so rapid hits restart cleanly
+	// clears previous flash so rapid hits restart cleanly
 	World->GetTimerManager().ClearTimer(TimerHandle);
 
 	UMaterialInstanceDynamic* RedMID = GetOrCreateRedMID(WorldContext);
@@ -64,10 +63,9 @@ void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStat
 		return;
 	}
 
-	// FlashColor defaults to red but allow overrides
 	RedMID->SetVectorParameterValue(FName(TEXT("Color")), FlashColor);
 
-	// Apply the overlay to every mesh
+	// applies the overlay to every mesh
 	for (UStaticMeshComponent* Mesh : Meshes)
 	{
 		if (IsValid(Mesh))
@@ -76,7 +74,7 @@ void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStat
 		}
 	}
 
-	// After Duration, remove the overlay
+	// schedules restore after Duration
 	AActor* Owner = Cast<AActor>(WorldContext);
 	TArray<UStaticMeshComponent*> MeshesCopy = Meshes;
 	FTimerDelegate RestoreDelegate;
@@ -91,16 +89,15 @@ void FCaveboundDamageFlash::FlashMeshes(UObject* WorldContext,const TArray<UStat
 	World->GetTimerManager().SetTimer(TimerHandle, RestoreDelegate, Duration, false);
 }
 
+// flashes a single mesh component, then restores outline
 void FCaveboundDamageFlash::FlashComponent(UObject* WorldContext, UMeshComponent* Mesh, FTimerHandle& TimerHandle, FLinearColor FlashColor, float Duration)
 {
-	// Need a world and a mesh, and the flash has to last longer than nothing.
 	UWorld* world = WorldContext ? WorldContext->GetWorld() : nullptr;
 	if (!world || !IsValid(Mesh) || Duration <= 0.f)
 	{
 		return;
 	}
 
-	// A new hit restarts the flash instead of stacking timers.
 	world->GetTimerManager().ClearTimer(TimerHandle);
 
 	UMaterialInstanceDynamic* flashMaterial = GetOrCreateRedMID(WorldContext);
@@ -109,11 +106,9 @@ void FCaveboundDamageFlash::FlashComponent(UObject* WorldContext, UMeshComponent
 		return;
 	}
 
-	// Paint the overlay and put it on the mesh.
 	flashMaterial->SetVectorParameterValue(FName(TEXT("Color")), FlashColor);
 	Mesh->SetOverlayMaterial(flashMaterial);
 
-	// Take the color back off after the flash time is over.
 	AActor* ownerActor = Cast<AActor>(WorldContext);
 	TWeakObjectPtr<UMeshComponent> meshToFlash = Mesh;
 	FTimerDelegate clearFlashLater;
